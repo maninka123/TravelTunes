@@ -145,44 +145,44 @@ function App() {
     setLanguages((current) => current.filter((item) => item !== language));
   }
 
-  async function readMood() {
-    if (!canRun) return;
-    setBusy("vision");
-    setStatus(`Reading photo mood with ${modelLabel}...`);
-    try {
-      const imagePayloads = await Promise.all(photos.map((photo) => readFileAsPayload(photo.file)));
-      const data = await postJson("/api/vision", {
-        model,
-        country,
-        energy,
-        style,
-        imageNotes,
-        photos: imagePayloads,
-      });
-      setMood(data.mood);
-      if (Number.isFinite(data.mood?.energy)) setEnergy(data.mood.energy);
-      setStatus(data.demo ? "Mood read used demo mode because the selected model key is missing." : "Mood read complete.");
-    } catch (error) {
-      setStatus(error.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function findSongs() {
     if (!canRun) return;
     setBusy("songs");
-    setStatus("Building song list...");
     try {
+      // First read the photo mood, then use it to shape the song list — one tap.
+      let currentMood = mood;
+      let effectiveEnergy = energy;
+      setStatus(`Reading photo mood with ${modelLabel}...`);
+      try {
+        const imagePayloads = await Promise.all(photos.map((photo) => readFileAsPayload(photo.file)));
+        const visionData = await postJson("/api/vision", {
+          model,
+          country,
+          energy,
+          style,
+          imageNotes,
+          photos: imagePayloads,
+        });
+        currentMood = visionData.mood;
+        setMood(visionData.mood);
+        if (Number.isFinite(visionData.mood?.energy)) {
+          effectiveEnergy = visionData.mood.energy;
+          setEnergy(visionData.mood.energy);
+        }
+      } catch {
+        // Mood read is best-effort; keep going with the current settings.
+      }
+
+      setStatus("Building song list...");
       const songData = await postJson("/api/songs", {
         model,
         country,
-        energy,
+        energy: effectiveEnergy,
         style,
         languages,
         tierOneCount,
         imageNotes,
-        mood,
+        mood: currentMood,
       });
 
       setStatus("Checking YouTube audio sources...");
@@ -320,10 +320,6 @@ function App() {
               Gemini
             </button>
           </div>
-          <button className="secondary-action" type="button" onClick={readMood} disabled={!canRun || busy === "vision"}>
-            {busy === "vision" ? <Loader2 className="spin" size={17} /> : <Sparkles size={17} />}
-            Read mood
-          </button>
           {mood ? (
             <div className="mood-strip">
               <strong>{mood.setting || "Travel scene"}</strong>
