@@ -205,25 +205,62 @@ h1 {
   clip: rect(0 0 0 0);
 }
 
+.photo-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.photo-actions .upload-target {
+  margin-bottom: 0;
+}
+
+.photo-actions .upload-target:first-child:last-child {
+  grid-column: 1 / -1;
+}
+
+.clear-photos,
+.remove-photo {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  color: #4a5a69;
+}
+
+.clear-photos {
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 82px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
 .photo-grid {
   display: grid;
   gap: 8px;
 }
 
-.photo-grid.one {
+.photo-grid.count-1 {
   grid-template-columns: 1fr;
 }
 
-.photo-grid.two {
+.photo-grid.count-2,
+.photo-grid.count-4 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.photo-grid.three {
+.photo-grid.count-3 {
   grid-template-columns: 1.08fr 0.92fr;
   grid-template-rows: auto auto;
 }
 
-.photo-grid.three .photo-tile:first-child {
+.photo-grid.count-3 .photo-tile:first-child {
   grid-row: span 2;
 }
 
@@ -240,14 +277,19 @@ h1 {
   box-shadow: 0 14px 28px rgba(23, 36, 49, 0.08);
 }
 
-.photo-grid.three .photo-tile {
+.photo-grid.count-3 .photo-tile,
+.photo-grid.count-4 .photo-tile {
   width: 100%;
   height: 100%;
   min-height: 0;
 }
 
-.photo-grid.three .photo-tile:first-child {
+.photo-grid.count-3 .photo-tile:first-child {
   aspect-ratio: auto;
+}
+
+.photo-grid.count-4 .photo-tile {
+  aspect-ratio: 1 / 0.72;
 }
 
 .photo-tile::before {
@@ -269,6 +311,20 @@ h1 {
   height: 100%;
   object-fit: contain;
   filter: saturate(1.03);
+}
+
+.remove-photo {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(23, 36, 49, 0.56);
+  border-color: rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(10px);
 }
 
 .country-picker {
@@ -777,7 +833,8 @@ button:focus-visible {
     padding: 15px;
   }
 
-  .photo-grid.three {
+  .photo-grid.count-3,
+  .photo-grid.count-4 {
     gap: 6px;
   }
 

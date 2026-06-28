@@ -64,7 +64,7 @@ async function callQwenSongs(env, body) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "Qwen song call failed.");
+  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen song call failed."));
   return parseJsonText(data.choices?.[0]?.message?.content)?.songs;
 }
 
@@ -159,6 +159,18 @@ function parseJsonText(text) {
 
 function qwenApiKey(env) {
   return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
+}
+
+function qwenErrorMessage(data, fallback) {
+  const message = data.error?.message || data.message || fallback;
+  const code = data.error?.code || data.code || "";
+  if (/invalid_api_key|api key|apikey/i.test(`${code} ${message}`)) {
+    return "Qwen/DashScope rejected the configured API key. Check QWEN_API_KEY or DASHSCOPE_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
+  }
+  if (/AccessDenied|Unpurchased|eligible|model denied/i.test(`${code} ${message}`)) {
+    return `Qwen/DashScope accepted the key but denied access to the selected model. Enable access for ${data.model || "qwen3.5-flash"} in Alibaba Model Studio, or set QWEN_TEXT_MODEL to a model your account can use.`;
+  }
+  return message;
 }
 
 function json(payload, status = 200) {

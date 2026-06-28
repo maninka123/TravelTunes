@@ -13,7 +13,7 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
     const provider = body.model === "qwen" ? "qwen" : "gemini";
-    const photos = Array.isArray(body.photos) ? body.photos.slice(0, 3) : [];
+    const photos = Array.isArray(body.photos) ? body.photos.slice(0, 4) : [];
 
     if (!photos.length) {
       return json({ error: "Upload at least one photo." }, 400);
@@ -96,7 +96,7 @@ async function callQwenVision(env, body, photos) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "Qwen vision call failed.");
+  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen vision call failed."));
   return parseJsonText(data.choices?.[0]?.message?.content) || demoMood(body);
 }
 
@@ -130,6 +130,18 @@ function parseJsonText(text) {
 
 function qwenApiKey(env) {
   return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
+}
+
+function qwenErrorMessage(data, fallback) {
+  const message = data.error?.message || data.message || fallback;
+  const code = data.error?.code || data.code || "";
+  if (/invalid_api_key|api key|apikey/i.test(`${code} ${message}`)) {
+    return "Qwen/DashScope rejected the configured API key. Check QWEN_API_KEY or DASHSCOPE_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
+  }
+  if (/AccessDenied|Unpurchased|eligible|model denied/i.test(`${code} ${message}`)) {
+    return "Qwen/DashScope accepted the key but denied access to the selected model. Enable access for the configured Qwen model in Alibaba Model Studio, or set QWEN_VISION_MODEL to a vision model your account can use.";
+  }
+  return message;
 }
 
 function json(payload, status = 200) {

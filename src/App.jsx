@@ -22,7 +22,7 @@ import { COUNTRY_OPTIONS, defaultLanguagesFor, flagForCountry } from "./data/cou
 import { postJson, readFileAsPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 4;
 
 const DEMO_SONGS = [
   {
@@ -88,12 +88,15 @@ function App() {
   }, [photos]);
 
   async function handlePhotos(event) {
-    const selected = Array.from(event.target.files || []).slice(0, MAX_PHOTOS);
+    const selected = Array.from(event.target.files || []);
+    if (!selected.length) return;
     const nextPhotos = await Promise.all(selected.map(readPhotoPreview));
 
     setPhotos((current) => {
-      current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
-      return nextPhotos;
+      const openSlots = Math.max(0, MAX_PHOTOS - current.length);
+      const addedPhotos = nextPhotos.slice(0, openSlots);
+      nextPhotos.slice(openSlots).forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+      return [...current, ...addedPhotos];
     });
     setMood(null);
     setStatus("");
@@ -107,6 +110,26 @@ function App() {
     }
 
     event.target.value = "";
+  }
+
+  function removePhoto(photoId) {
+    setPhotos((current) => {
+      const removed = current.find((photo) => photo.id === photoId);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((photo) => photo.id !== photoId);
+    });
+    setMood(null);
+    setStatus("");
+  }
+
+  function clearPhotos() {
+    setPhotos((current) => {
+      current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+      return [];
+    });
+    setMood(null);
+    setDetectedCountry("");
+    setStatus("");
   }
 
   function addLanguage() {
@@ -201,7 +224,13 @@ function App() {
 
         <section className="surface photo-surface">
           <SectionHeading icon={<Camera size={18} />} label="Photos" meta={`${photos.length}/${MAX_PHOTOS}`} />
-          <PhotoGallery photos={photos} onChange={handlePhotos} />
+          <PhotoGallery
+            photos={photos}
+            maxPhotos={MAX_PHOTOS}
+            onChange={handlePhotos}
+            onRemove={removePhoto}
+            onClear={clearPhotos}
+          />
         </section>
 
         <section className="surface">
@@ -328,16 +357,27 @@ function SectionHeading({ icon, label, meta }) {
   );
 }
 
-function PhotoGallery({ photos, onChange }) {
-  const layoutClass = photos.length === 1 ? "one" : photos.length === 2 ? "two" : photos.length === 3 ? "three" : "empty";
+function PhotoGallery({ photos, maxPhotos, onChange, onRemove, onClear }) {
+  const remaining = Math.max(0, maxPhotos - photos.length);
+  const layoutClass = photos.length ? `count-${photos.length}` : "empty";
 
   return (
     <>
-      <label className={photos.length ? "upload-target compact" : "upload-target"}>
-        <input type="file" accept="image/*" multiple onChange={onChange} />
-        <ImagePlus size={21} />
-        <span>{photos.length ? "Replace photos" : "Add up to 3 photos"}</span>
-      </label>
+      <div className="photo-actions">
+        {remaining ? (
+          <label className={photos.length ? "upload-target compact" : "upload-target"}>
+            <input type="file" accept="image/*" multiple onChange={onChange} />
+            <ImagePlus size={21} />
+            <span>{photos.length ? `Add ${remaining} more` : `Add up to ${maxPhotos} photos`}</span>
+          </label>
+        ) : null}
+        {photos.length ? (
+          <button className="clear-photos" type="button" onClick={onClear}>
+            <X size={16} />
+            Clear
+          </button>
+        ) : null}
+      </div>
 
       {photos.length ? (
         <div className={`photo-grid ${layoutClass}`}>
@@ -351,6 +391,9 @@ function PhotoGallery({ photos, onChange }) {
               }}
             >
               <img src={photo.previewUrl} alt={`Uploaded travel ${index + 1}`} />
+              <button className="remove-photo" type="button" onClick={() => onRemove(photo.id)} aria-label={`Remove photo ${index + 1}`}>
+                <X size={15} />
+              </button>
             </figure>
           ))}
         </div>
@@ -609,7 +652,7 @@ function readPhotoPreview(file) {
     const image = new Image();
     image.onload = () => {
       resolve({
-        id: `${file.name}-${file.lastModified}-${file.size}`,
+        id: createPhotoId(file),
         file,
         name: file.name,
         previewUrl,
@@ -619,7 +662,7 @@ function readPhotoPreview(file) {
     };
     image.onerror = () => {
       resolve({
-        id: `${file.name}-${file.lastModified}-${file.size}`,
+        id: createPhotoId(file),
         file,
         name: file.name,
         previewUrl,
@@ -629,6 +672,14 @@ function readPhotoPreview(file) {
     };
     image.src = previewUrl;
   });
+}
+
+function createPhotoId(file) {
+  const randomId =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${file.name}-${file.lastModified}-${file.size}-${randomId}`;
 }
 
 function formatTime(seconds) {

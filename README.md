@@ -6,7 +6,7 @@ Turn travel photos into country-aware song picks with a clean, mobile-first app.
 
 ## ✨ What It Does
 
-- 📸 Upload up to 3 travel photos.
+- 📸 Upload up to 4 travel photos.
 - 🧭 Detect the photo country from EXIF GPS when available.
 - 🌍 Search countries with flag suggestions and manual override.
 - 🎚️ Tune the vibe with premium Energy and Style sliders.
