@@ -13,19 +13,21 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 ## 📱 App Preview
 
-![TravelTunes full app screenshot](./public/app-screenshot.png)
+<p align="center">
+  <img src="./public/app-screenshot.png" alt="TravelTunes full app screenshot" width="420" />
+</p>
 
 ## ✨ What It Does
 
-- 📸 Upload up to 4 travel photos.
-- 🧭 Detect the photo country from EXIF GPS when available.
-- 🌍 Search countries with flag suggestions and manual override.
-- 🎚️ Tune the vibe with premium Energy and Style sliders.
-- 🗣️ Prioritize English, Sinhala, and local-language music.
-- 🧠 Choose Qwen or Gemini for photo mood and song generation.
-- ▶️ Play songs in an audio-first row UI with a seek timeline.
-- 📋 Copy individual song names from each result row.
-- ☁️ Runs on Cloudflare Pages + Functions so API keys stay server-side.
+- Upload up to 4 travel photos with a dynamic preview layout.
+- Detect the photo country from EXIF GPS when available.
+- Search all countries with flag suggestions and manual override.
+- Tune the vibe with Energy and Style sliders.
+- Prioritize English, Sinhala, and local-language music.
+- Choose Qwen or Gemini for photo mood and song generation.
+- Play songs in an audio-first row UI with a seek timeline.
+- Copy individual song names from each result row.
+- Runs on Cloudflare Pages + Functions so API keys stay server-side.
 
 ## 🧱 Stack
 
