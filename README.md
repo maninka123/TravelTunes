@@ -1,8 +1,19 @@
 # 🎧 TravelTunes
 
-Turn travel photos into country-aware song picks with a clean, mobile-first app.
+Photo mood to country-aware songs, wrapped in a clean mobile-first app.
 
-![TravelTunes app screenshot](./public/app-screenshot.png)
+[![Live App](https://img.shields.io/badge/Live-traveltunes.pages.dev-087f8c?style=for-the-badge&logo=cloudflarepages&logoColor=white)](https://traveltunes.pages.dev)
+![React](https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=111827)
+![Vite](https://img.shields.io/badge/Vite-6-646cff?style=for-the-badge&logo=vite&logoColor=white)
+![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages-f38020?style=for-the-badge&logo=cloudflare&logoColor=white)
+
+## 🌐 Live App
+
+Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
+
+## 📱 App Preview
+
+![TravelTunes full app screenshot](./public/app-screenshot.png)
 
 ## ✨ What It Does
 
@@ -18,8 +29,8 @@ Turn travel photos into country-aware song picks with a clean, mobile-first app.
 
 ## 🧱 Stack
 
-- React + Vite
-- Cloudflare Pages Functions
+- React 18 + Vite
+- Cloudflare Pages + Pages Functions
 - `exifr` for client-side GPS metadata
 - OpenStreetMap Nominatim for reverse geocoding
 - Gemini + Qwen/DashScope model routes
