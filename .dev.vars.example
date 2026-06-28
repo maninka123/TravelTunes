@@ -1,0 +1,9 @@
+GEMINI_API_KEY=
+QWEN_API_KEY=
+YOUTUBE_API_KEY=
+
+# Optional model overrides
+GEMINI_VISION_MODEL=gemini-3.1-flash-lite
+GEMINI_TEXT_MODEL=gemini-3.1-flash-lite
+QWEN_VISION_MODEL=qwen3-vl-flash
+QWEN_TEXT_MODEL=qwen3-vl-flash
