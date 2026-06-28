@@ -20,7 +20,7 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (provider === "qwen") {
-      if (!env.QWEN_API_KEY) return json({ mood: demoMood(body), demo: true });
+      if (!qwenApiKey(env)) return json({ mood: demoMood(body), demo: true });
       return json({ mood: await callQwenVision(env, body, photos), demo: false });
     }
 
@@ -67,15 +67,16 @@ async function callGeminiVision(env, body, photos) {
 }
 
 async function callQwenVision(env, body, photos) {
-  const model = env.QWEN_VISION_MODEL || "qwen3-vl-flash";
+  const model = env.QWEN_VISION_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.QWEN_API_KEY}`,
+      Authorization: `Bearer ${qwenApiKey(env)}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
+      enable_thinking: true,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -125,6 +126,10 @@ function parseJsonText(text) {
     const match = cleaned.match(/\{[\s\S]*\}/);
     return match ? JSON.parse(match[0]) : null;
   }
+}
+
+function qwenApiKey(env) {
+  return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
 }
 
 function json(payload, status = 200) {

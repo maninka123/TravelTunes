@@ -15,7 +15,7 @@ export async function onRequestPost({ request, env }) {
     const provider = body.model === "qwen" ? "qwen" : "gemini";
 
     if (provider === "qwen") {
-      if (!env.QWEN_API_KEY) return json({ songs: demoSongs(body), demo: true });
+      if (!qwenApiKey(env)) return json({ songs: demoSongs(body), demo: true });
       return json({ songs: normalizeSongs(await callQwenSongs(env, body)), demo: false });
     }
 
@@ -48,15 +48,16 @@ async function callGeminiSongs(env, body) {
 }
 
 async function callQwenSongs(env, body) {
-  const model = env.QWEN_TEXT_MODEL || env.QWEN_VISION_MODEL || "qwen3-vl-flash";
+  const model = env.QWEN_TEXT_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.QWEN_API_KEY}`,
+      Authorization: `Bearer ${qwenApiKey(env)}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
+      enable_thinking: true,
       response_format: { type: "json_object" },
       messages: [{ role: "user", content: songPrompt(body) }],
     }),
@@ -154,6 +155,10 @@ function parseJsonText(text) {
     const match = cleaned.match(/\{[\s\S]*\}/);
     return match ? JSON.parse(match[0]) : null;
   }
+}
+
+function qwenApiKey(env) {
+  return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
 }
 
 function json(payload, status = 200) {

@@ -47,7 +47,7 @@ Set these encrypted environment variables in Cloudflare Pages:
 
 ```text
 GEMINI_API_KEY
-QWEN_API_KEY
+QWEN_API_KEY or DASHSCOPE_API_KEY
 YOUTUBE_API_KEY
 ```
 
