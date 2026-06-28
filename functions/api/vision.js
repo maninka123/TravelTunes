@@ -101,7 +101,9 @@ async function callQwenVision(env, body, photos) {
 }
 
 function visionPrompt(body) {
+  const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
   return `Return JSON only for a travel photo mood read. Country: ${body.country || "unknown"}.
+User image notes: ${imageNotes || "none"}.
 Use this schema: {"energy": number 0-100, "setting": string, "mood": string, "palette": string[], "notes": string}.
 Keep it concise and infer travel ambience, not identity or sensitive attributes.`;
 }

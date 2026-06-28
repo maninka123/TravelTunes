@@ -70,6 +70,7 @@ async function callQwenSongs(env, body) {
 
 function songPrompt(body) {
   const languages = Array.isArray(body.languages) ? body.languages.join(", ") : "English, Sinhala, local language";
+  const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
   return `Return JSON only with {"songs":[...]}.
 Suggest 8 real songs for travel photos.
 Country: ${body.country || "unknown"}
@@ -77,6 +78,7 @@ Energy slider 0 quiet to 100 energetic: ${body.energy}
 Style slider 0 traditional to 100 mainstream: ${body.style}
 Tier-1 languages/countries: ${languages}
 Preferred tier-1 count: ${body.tierOneCount || 5}
+User image notes: ${imageNotes || "none"}
 Mood read: ${JSON.stringify(body.mood || {})}
 Each song object must be {"title": string, "artist": string, "language": string, "tier": 1 or 2, "reason": string}.
 Prioritize English, Sinhala, and the country's local music before wider global picks. Avoid made-up songs.`;

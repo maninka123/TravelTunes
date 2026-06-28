@@ -8,6 +8,7 @@ import {
   ImagePlus,
   Loader2,
   MapPin,
+  MessageSquareText,
   Music2,
   Pause,
   Play,
@@ -65,6 +66,7 @@ function App() {
   const [languages, setLanguages] = useState(defaultLanguagesFor("Sri Lanka"));
   const [customLanguage, setCustomLanguage] = useState("");
   const [tierOneCount, setTierOneCount] = useState(5);
+  const [imageNotes, setImageNotes] = useState("");
   const [mood, setMood] = useState(null);
   const [songs, setSongs] = useState(DEMO_SONGS);
   const [status, setStatus] = useState("");
@@ -154,6 +156,7 @@ function App() {
         country,
         energy,
         style,
+        imageNotes,
         photos: imagePayloads,
       });
       setMood(data.mood);
@@ -178,6 +181,7 @@ function App() {
         style,
         languages,
         tierOneCount,
+        imageNotes,
         mood,
       });
 
@@ -240,6 +244,17 @@ function App() {
             meta={detectedCountry ? "Detected" : "Select"}
           />
           <CountryPicker value={country} onChange={setCountry} />
+        </section>
+
+        <section className="surface notes-surface">
+          <SectionHeading icon={<MessageSquareText size={18} />} label="Image notes" meta="Optional" />
+          <input
+            value={imageNotes}
+            onChange={(event) => setImageNotes(event.target.value)}
+            maxLength={180}
+            placeholder="Beach sunset, train ride, friends, calm morning..."
+            aria-label="Optional image notes for the AI"
+          />
         </section>
 
         <section className="surface controls-surface">
@@ -494,6 +509,7 @@ function PremiumSlider({ icon, label, left, right, value, onChange }) {
 function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
   const playerRef = useRef(null);
   const playerNodeId = useMemo(() => `yt-${songKey.replace(/[^a-z0-9]+/gi, "-")}`, [songKey]);
+  const isActive = activeSongKey === songKey;
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(180);
@@ -560,15 +576,15 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
 
   function togglePlay() {
     if (!song.videoId) {
-      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.title} ${song.artist}`)}`, "_blank", "noreferrer");
+      onActiveSongChange(songKey);
       return;
     }
     const player = playerRef.current;
+    onActiveSongChange(songKey);
     if (!player || !isReady) return;
     if (isPlaying) {
       player.pauseVideo();
     } else {
-      onActiveSongChange(songKey);
       player.playVideo();
     }
   }
@@ -593,8 +609,14 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
     .slice(0, 2);
 
   return (
-    <article className={`song-row ${isPlaying ? "playing" : ""}`}>
-      <button className="play-button" type="button" onClick={togglePlay} aria-label={`${isPlaying ? "Pause" : "Play"} ${song.title}`}>
+    <article className={`song-row ${isActive ? "active" : ""} ${isPlaying ? "playing" : ""}`}>
+      <button
+        className="play-button"
+        type="button"
+        onClick={togglePlay}
+        aria-label={`${isPlaying ? "Pause" : "Play"} ${song.title}`}
+        title={song.videoId ? "Play in app" : "Audio source not available"}
+      >
         {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
       </button>
       <div className="song-main">
@@ -626,6 +648,7 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
           />
           <span>{formatTime(duration)}</span>
         </div>
+        {isActive && !song.videoId ? <p className="audio-note">Audio source not available yet.</p> : null}
       </div>
       {song.videoId ? <div className="youtube-audio" id={playerNodeId} aria-hidden="true" /> : null}
     </article>
