@@ -1,49 +1,54 @@
-# TravelTunes
+# 🎧 TravelTunes
 
-TravelTunes is an iPhone-first Cloudflare Pages app that turns up to three travel photos into a country-aware song list with YouTube playback.
+Turn travel photos into country-aware song picks with a clean, mobile-first app.
 
-## Features
+![TravelTunes app screenshot](./public/app-screenshot.png)
 
-- Upload up to 3 photos and preview them locally.
-- Read EXIF GPS data in the browser with `exifr`.
-- Reverse-geocode GPS coordinates to a country using OpenStreetMap Nominatim.
-- Manually override the country at any time.
-- Tune Energy and Style sliders.
-- Adjust language priority chips and add custom languages or countries.
-- Select Gemini or Qwen for the vision mood read and song suggestions.
-- Search YouTube server-side and embed playable results when `YOUTUBE_API_KEY` is configured.
+## ✨ What It Does
 
-## Local Development
+- 📸 Upload up to 3 travel photos.
+- 🧭 Detect the photo country from EXIF GPS when available.
+- 🌍 Search countries with flag suggestions and manual override.
+- 🎚️ Tune the vibe with premium Energy and Style sliders.
+- 🗣️ Prioritize English, Sinhala, and local-language music.
+- 🧠 Choose Qwen or Gemini for photo mood and song generation.
+- ▶️ Play songs in an audio-first row UI with a seek timeline.
+- 📋 Copy individual song names from each result row.
+- ☁️ Runs on Cloudflare Pages + Functions so API keys stay server-side.
+
+## 🧱 Stack
+
+- React + Vite
+- Cloudflare Pages Functions
+- `exifr` for client-side GPS metadata
+- OpenStreetMap Nominatim for reverse geocoding
+- Gemini + Qwen/DashScope model routes
+- YouTube Data API search for playable tracks
+
+## 🚀 Local Development
+
+Install dependencies:
 
 ```bash
 npm install
+```
+
+Run frontend only:
+
+```bash
 npm run dev
 ```
 
-Vite serves the frontend only. API routes need Cloudflare Pages Functions:
+Run with Cloudflare Functions locally:
 
 ```bash
 cp .dev.vars.example .dev.vars
 npm run cf:dev
 ```
 
-Keep real keys in `.env.local`, `.dev.vars`, or Cloudflare Pages encrypted environment variables. They are intentionally ignored by git.
+Add real keys to `.dev.vars` or copy them from `.env.local`. These files are ignored by git.
 
-## Cloudflare Pages
-
-Build command:
-
-```bash
-npm run build
-```
-
-Output directory:
-
-```text
-dist
-```
-
-Set these encrypted environment variables in Cloudflare Pages:
+## 🔐 Required Env Vars
 
 ```text
 GEMINI_API_KEY
@@ -51,8 +56,33 @@ QWEN_API_KEY or DASHSCOPE_API_KEY
 YOUTUBE_API_KEY
 ```
 
-Optional model overrides are listed in `.env.example`.
+Optional model overrides:
 
-## Future Place Data
+```text
+GEMINI_VISION_MODEL
+GEMINI_TEXT_MODEL
+QWEN_MODEL
+QWEN_VISION_MODEL
+QWEN_TEXT_MODEL
+```
+
+## ☁️ Cloudflare Pages Deploy
+
+Use these Pages build settings:
+
+```text
+Build command: npm run build
+Output directory: dist
+```
+
+Then add the env vars above in:
+
+```text
+Cloudflare Pages → Settings → Environment variables
+```
+
+Every push to GitHub can deploy automatically once the repo is connected.
+
+## 📍 Future Place Data
 
 Use the `places/` folder for place-specific song rules, language defaults, or curated overrides.

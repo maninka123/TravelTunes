@@ -1,4 +1,6 @@
 import {
+  Bot,
+  BrainCircuit,
   Camera,
   Check,
   Copy,
@@ -7,14 +9,16 @@ import {
   Loader2,
   MapPin,
   Music2,
+  Pause,
   Play,
   RotateCcw,
-  SlidersHorizontal,
+  Search,
   Sparkles,
+  WandSparkles,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { COUNTRIES, defaultLanguagesFor } from "./data/countries";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { COUNTRY_OPTIONS, defaultLanguagesFor, flagForCountry } from "./data/countries";
 import { postJson, readFileAsPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
@@ -29,18 +33,25 @@ const DEMO_SONGS = [
     reason: "Bright Sinhala pop that fits sunlit travel memories.",
   },
   {
-    title: "Paradise",
-    artist: "Coldplay",
-    language: "English",
+    title: "Ayubowan",
+    artist: "Dhanith Sri",
+    language: "Sinhala",
     tier: 1,
-    reason: "A wide, scenic hook for postcard-style moments.",
+    reason: "Warm local energy for Sri Lankan travel moments.",
   },
   {
-    title: "Bella Ciao",
-    artist: "Traditional",
-    language: "Local",
+    title: "Rata Riduna",
+    artist: "Bathiya & Santhush",
+    language: "Sinhala",
+    tier: 1,
+    reason: "A polished regional pick with movement and nostalgia.",
+  },
+  {
+    title: "Saheli",
+    artist: "Nanda Malini",
+    language: "Sinhala",
     tier: 2,
-    reason: "A familiar regional classic when the place calls for tradition.",
+    reason: "A softer classic for slower scenic clips.",
   },
 ];
 
@@ -48,7 +59,6 @@ function App() {
   const [photos, setPhotos] = useState([]);
   const [country, setCountry] = useState("Sri Lanka");
   const [detectedCountry, setDetectedCountry] = useState("");
-  const [locationStatus, setLocationStatus] = useState("Upload photos to detect country from EXIF GPS.");
   const [energy, setEnergy] = useState(62);
   const [style, setStyle] = useState(44);
   const [model, setModel] = useState("gemini");
@@ -59,10 +69,10 @@ function App() {
   const [songs, setSongs] = useState(DEMO_SONGS);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [activeSongKey, setActiveSongKey] = useState("");
 
-  const modelLabel = model === "gemini" ? "Gemini" : "Qwen";
   const canRun = photos.length > 0 && country;
+  const modelLabel = model === "gemini" ? "Gemini" : "Qwen";
 
   useEffect(() => {
     setLanguages((current) => {
@@ -71,43 +81,32 @@ function App() {
     });
   }, [country]);
 
+  useEffect(() => {
+    return () => {
+      photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+    };
+  }, [photos]);
+
   async function handlePhotos(event) {
     const selected = Array.from(event.target.files || []).slice(0, MAX_PHOTOS);
-    photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
-    const nextPhotos = selected.map((file) => ({
-      id: `${file.name}-${file.lastModified}-${file.size}`,
-      file,
-      name: file.name,
-      previewUrl: URL.createObjectURL(file),
-    }));
-    setPhotos(nextPhotos);
+    const nextPhotos = await Promise.all(selected.map(readPhotoPreview));
+
+    setPhotos((current) => {
+      current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+      return nextPhotos;
+    });
     setMood(null);
+    setStatus("");
 
-    if (!nextPhotos.length) {
-      setLocationStatus("Upload photos to detect country from EXIF GPS.");
-      return;
+    const detected = await detectCountry(nextPhotos);
+    if (detected) {
+      setDetectedCountry(detected);
+      setCountry(detected);
+    } else {
+      setDetectedCountry("");
     }
 
-    setLocationStatus("Checking photo GPS...");
-    for (const photo of nextPhotos) {
-      const gps = await getGpsFromPhoto(photo.file);
-      if (!gps) continue;
-
-      try {
-        const place = await reverseGeocodeCountry(gps);
-        if (place) {
-          setDetectedCountry(place);
-          setCountry(place);
-          setLocationStatus(`Detected ${place} from photo GPS. You can still override it.`);
-          return;
-        }
-      } catch {
-        break;
-      }
-    }
-
-    setDetectedCountry("");
-    setLocationStatus("No usable GPS found. Choose the country manually.");
+    event.target.value = "";
   }
 
   function addLanguage() {
@@ -147,7 +146,6 @@ function App() {
   async function findSongs() {
     if (!canRun) return;
     setBusy("songs");
-    setCopied(false);
     setStatus("Building song list...");
     try {
       const songData = await postJson("/api/songs", {
@@ -160,7 +158,7 @@ function App() {
         mood,
       });
 
-      setStatus("Checking YouTube results...");
+      setStatus("Checking YouTube audio sources...");
       const hydrated = await Promise.all(
         songData.songs.map(async (song) => {
           try {
@@ -175,7 +173,7 @@ function App() {
       );
 
       setSongs(hydrated);
-      setStatus(songData.demo ? "Song list used demo mode because a model key is missing." : "Song list ready.");
+      setStatus(songData.demo ? "Demo song list shown because a model key is missing." : "Song list ready.");
     } catch (error) {
       setStatus(error.message);
     } finally {
@@ -183,21 +181,13 @@ function App() {
     }
   }
 
-  async function copyList() {
-    const text = songs.map((song, index) => `${index + 1}. ${song.title} - ${song.artist}`).join("\n");
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-  }
-
-  const countryOptions = useMemo(() => Array.from(new Set([country, ...COUNTRIES])).filter(Boolean), [country]);
-
   return (
     <main className="app-shell">
       <section className="workspace" aria-label="TravelTunes song picker">
         <header className="topbar">
           <div className="brand">
             <span className="brand-mark" aria-hidden="true">
-              <Music2 size={20} />
+              <Music2 size={22} />
             </span>
             <div>
               <h1>TravelTunes</h1>
@@ -205,72 +195,45 @@ function App() {
             </div>
           </div>
           <button className="icon-button" type="button" onClick={() => window.location.reload()} aria-label="Reset">
-            <RotateCcw size={18} />
+            <RotateCcw size={19} />
           </button>
         </header>
 
-        <div className="panel upload-panel">
-          <div className="section-heading">
-            <span>
-              <Camera size={18} />
-              Photos
-            </span>
-            <small>{photos.length}/{MAX_PHOTOS}</small>
-          </div>
-          <label className="upload-target">
-            <input type="file" accept="image/*" multiple onChange={handlePhotos} />
-            <ImagePlus size={22} />
-            <span>Add up to 3 photos</span>
-          </label>
-          <div className="thumb-row">
-            {Array.from({ length: MAX_PHOTOS }).map((_, index) => {
-              const photo = photos[index];
-              return (
-                <div className="thumb" key={index}>
-                  {photo ? <img src={photo.previewUrl} alt={photo.name} /> : <ImagePlus size={18} />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <section className="surface photo-surface">
+          <SectionHeading icon={<Camera size={18} />} label="Photos" meta={`${photos.length}/${MAX_PHOTOS}`} />
+          <PhotoGallery photos={photos} onChange={handlePhotos} />
+        </section>
 
-        <div className="panel">
-          <div className="section-heading">
-            <span>
-              <MapPin size={18} />
-              Country
-            </span>
-            {detectedCountry ? <small>GPS</small> : <small>Manual</small>}
-          </div>
-          <select value={country} onChange={(event) => setCountry(event.target.value)}>
-            {countryOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <p className="hint">{locationStatus}</p>
-        </div>
+        <section className="surface">
+          <SectionHeading
+            icon={<MapPin size={18} />}
+            label="Country"
+            meta={detectedCountry ? "Detected" : "Select"}
+          />
+          <CountryPicker value={country} onChange={setCountry} />
+        </section>
 
-        <div className="panel">
-          <div className="section-heading">
-            <span>
-              <SlidersHorizontal size={18} />
-              Vibe
-            </span>
-          </div>
-          <Slider label="Energy" left="Quiet" right="Energetic" value={energy} onChange={setEnergy} />
-          <Slider label="Style" left="Traditional" right="Mainstream" value={style} onChange={setStyle} />
-        </div>
+        <section className="surface controls-surface">
+          <PremiumSlider
+            icon={<Sparkles size={18} />}
+            label="Energy"
+            left="Calm"
+            right="High"
+            value={energy}
+            onChange={setEnergy}
+          />
+          <PremiumSlider
+            icon={<WandSparkles size={18} />}
+            label="Style"
+            left="Traditional"
+            right="Modern"
+            value={style}
+            onChange={setStyle}
+          />
+        </section>
 
-        <div className="panel">
-          <div className="section-heading">
-            <span>
-              <Globe2 size={18} />
-              Languages
-            </span>
-            <small>{tierOneCount} tier-1</small>
-          </div>
+        <section className="surface">
+          <SectionHeading icon={<Globe2 size={18} />} label="Languages" meta={`${tierOneCount} tier-1`} />
           <div className="chip-row">
             {languages.map((language) => (
               <button className="chip selected" type="button" key={language} onClick={() => removeLanguage(language)}>
@@ -292,28 +255,25 @@ function App() {
           </div>
           <input
             aria-label="Tier one count"
-            className="thin-range"
+            className="tier-range"
             type="range"
             min="2"
             max="8"
             value={tierOneCount}
             onChange={(event) => setTierOneCount(Number(event.target.value))}
           />
-        </div>
+        </section>
 
-        <div className="panel model-panel">
-          <div className="section-heading">
-            <span>
-              <Sparkles size={18} />
-              Model
-            </span>
-          </div>
+        <section className="surface model-surface">
+          <SectionHeading icon={<BrainCircuit size={18} />} label="Model" />
           <div className="segment" role="tablist" aria-label="Vision model">
-            <button className={model === "gemini" ? "active" : ""} type="button" onClick={() => setModel("gemini")}>
-              Gemini
-            </button>
             <button className={model === "qwen" ? "active" : ""} type="button" onClick={() => setModel("qwen")}>
+              <Bot size={18} />
               Qwen
+            </button>
+            <button className={model === "gemini" ? "active" : ""} type="button" onClick={() => setModel("gemini")}>
+              <Sparkles size={18} />
+              Gemini
             </button>
           </div>
           <button className="secondary-action" type="button" onClick={readMood} disabled={!canRun || busy === "vision"}>
@@ -326,42 +286,160 @@ function App() {
               <span>{mood.mood || "balanced, scenic, warm"}</span>
             </div>
           ) : null}
-        </div>
+        </section>
+
+        <section className="songs" aria-label="Song results">
+          <div className="song-list">
+            {songs.map((song, index) => {
+              const songKey = `${song.title}-${song.artist}-${index}`;
+              return (
+                <SongRow
+                  song={song}
+                  songKey={songKey}
+                  key={songKey}
+                  activeSongKey={activeSongKey}
+                  onActiveSongChange={setActiveSongKey}
+                />
+              );
+            })}
+          </div>
+        </section>
 
         <button className="primary-action" type="button" onClick={findSongs} disabled={!canRun || busy === "songs"}>
-          {busy === "songs" ? <Loader2 className="spin" size={19} /> : <Play size={19} />}
+          {busy === "songs" ? <Loader2 className="spin" size={19} /> : <Music2 size={19} />}
           Find songs
         </button>
 
         {status ? <p className="status">{status}</p> : null}
-
-        <section className="songs" aria-label="Song results">
-          <div className="songs-head">
-            <h2>Songs</h2>
-            <button className="copy-button" type="button" onClick={copyList} disabled={!songs.length}>
-              {copied ? <Check size={16} /> : <Copy size={16} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
-          <div className="song-list">
-            {songs.map((song, index) => (
-              <SongCard song={song} key={`${song.title}-${song.artist}-${index}`} />
-            ))}
-          </div>
-        </section>
       </section>
     </main>
   );
 }
 
-function Slider({ label, left, right, value, onChange }) {
+function SectionHeading({ icon, label, meta }) {
+  return (
+    <div className="section-heading">
+      <span>
+        {icon}
+        {label}
+      </span>
+      {meta ? <small>{meta}</small> : null}
+    </div>
+  );
+}
+
+function PhotoGallery({ photos, onChange }) {
+  const layoutClass = photos.length === 1 ? "one" : photos.length === 2 ? "two" : photos.length === 3 ? "three" : "empty";
+
+  return (
+    <>
+      <label className={photos.length ? "upload-target compact" : "upload-target"}>
+        <input type="file" accept="image/*" multiple onChange={onChange} />
+        <ImagePlus size={21} />
+        <span>{photos.length ? "Replace photos" : "Add up to 3 photos"}</span>
+      </label>
+
+      {photos.length ? (
+        <div className={`photo-grid ${layoutClass}`}>
+          {photos.map((photo, index) => (
+            <figure
+              className="photo-tile"
+              key={photo.id}
+              style={{
+                "--photo-bg": `url("${photo.previewUrl}")`,
+                "--photo-aspect": `${photo.width || 4} / ${photo.height || 3}`,
+              }}
+            >
+              <img src={photo.previewUrl} alt={`Uploaded travel ${index + 1}`} />
+            </figure>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function CountryPicker({ value, onChange }) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    const pool = normalized
+      ? COUNTRY_OPTIONS.filter((country) => country.name.toLowerCase().includes(normalized))
+      : COUNTRY_OPTIONS;
+    return pool.slice(0, 12);
+  }, [query]);
+
+  function selectCountry(name) {
+    onChange(name);
+    setQuery(name);
+    setOpen(false);
+  }
+
+  return (
+    <div className="country-picker">
+      <div className="country-input-shell">
+        <span className="country-flag">{flagForCountry(value)}</span>
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() =>
+            window.setTimeout(() => {
+              setOpen(false);
+              if (!COUNTRY_OPTIONS.some((country) => country.name === query)) setQuery(value);
+            }, 120)
+          }
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !filtered[0]) return;
+            event.preventDefault();
+            selectCountry(filtered[0].name);
+          }}
+          placeholder="Search countries"
+          aria-label="Search countries"
+        />
+        <Search size={18} />
+      </div>
+      {open ? (
+        <div className="country-menu">
+          {filtered.map((country) => (
+            <button type="button" key={country.code} onMouseDown={() => selectCountry(country.name)}>
+              <span>{country.flag}</span>
+              <strong>{country.name}</strong>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PremiumSlider({ icon, label, left, right, value, onChange }) {
   return (
     <label className="slider-block">
       <span className="slider-title">
-        {label}
+        <span>
+          {icon}
+          {label}
+        </span>
         <strong>{value}</strong>
       </span>
-      <input type="range" min="0" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        style={{ "--value": `${value}%` }}
+      />
       <span className="slider-labels">
         <small>{left}</small>
         <small>{right}</small>
@@ -370,34 +448,215 @@ function Slider({ label, left, right, value, onChange }) {
   );
 }
 
-function SongCard({ song }) {
+function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
+  const playerRef = useRef(null);
+  const playerNodeId = useMemo(() => `yt-${songKey.replace(/[^a-z0-9]+/gi, "-")}`, [songKey]);
+  const [isReady, setIsReady] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(180);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!song.videoId) return undefined;
+    let cancelled = false;
+    loadYoutubeApi().then((YT) => {
+      if (cancelled || playerRef.current) return;
+      playerRef.current = new YT.Player(playerNodeId, {
+        width: "1",
+        height: "1",
+        videoId: song.videoId,
+        playerVars: {
+          controls: 0,
+          disablekb: 1,
+          modestbranding: 1,
+          playsinline: 1,
+          rel: 0,
+        },
+        events: {
+          onReady: (event) => {
+            setIsReady(true);
+            const nextDuration = event.target.getDuration();
+            if (Number.isFinite(nextDuration) && nextDuration > 0) setDuration(nextDuration);
+          },
+          onStateChange: (event) => {
+            const playing = event.data === YT.PlayerState.PLAYING;
+            setIsPlaying(playing);
+            if (playing) onActiveSongChange(songKey);
+          },
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (playerRef.current?.destroy) {
+        playerRef.current.destroy();
+        playerRef.current = null;
+      }
+    };
+  }, [onActiveSongChange, playerNodeId, song.videoId, songKey]);
+
+  useEffect(() => {
+    if (activeSongKey === songKey || !playerRef.current?.pauseVideo) return;
+    playerRef.current.pauseVideo();
+    setIsPlaying(false);
+  }, [activeSongKey, songKey]);
+
+  useEffect(() => {
+    if (!isPlaying) return undefined;
+    const timer = window.setInterval(() => {
+      const player = playerRef.current;
+      if (!player?.getCurrentTime) return;
+      const nextTime = player.getCurrentTime();
+      const nextDuration = player.getDuration?.();
+      setCurrentTime(Number.isFinite(nextTime) ? nextTime : 0);
+      if (Number.isFinite(nextDuration) && nextDuration > 0) setDuration(nextDuration);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [isPlaying]);
+
+  function togglePlay() {
+    if (!song.videoId) {
+      window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.title} ${song.artist}`)}`, "_blank", "noreferrer");
+      return;
+    }
+    const player = playerRef.current;
+    if (!player || !isReady) return;
+    if (isPlaying) {
+      player.pauseVideo();
+    } else {
+      onActiveSongChange(songKey);
+      player.playVideo();
+    }
+  }
+
+  function seek(event) {
+    const nextTime = Number(event.target.value);
+    setCurrentTime(nextTime);
+    playerRef.current?.seekTo?.(nextTime, true);
+  }
+
+  async function copySong() {
+    await navigator.clipboard.writeText(`${song.title} - ${song.artist}`);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  }
+
+  const progress = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const languages = String(song.language || "Music")
+    .split(/[,+/]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+
   return (
-    <article className="song-card">
-      <div className="song-meta">
-        <div>
-          <h3>{song.title}</h3>
-          <p>{song.artist}</p>
+    <article className={`song-row ${isPlaying ? "playing" : ""}`}>
+      <button className="play-button" type="button" onClick={togglePlay} aria-label={`${isPlaying ? "Pause" : "Play"} ${song.title}`}>
+        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+      </button>
+      <div className="song-main">
+        <div className="song-line">
+          <div className="song-text">
+            <h3>{song.title}</h3>
+            <p>{song.artist}</p>
+          </div>
+          <div className="song-tags">
+            {languages.map((language) => (
+              <span className="song-tag" key={language}>{language}</span>
+            ))}
+          </div>
+          <button className="song-copy" type="button" onClick={copySong} aria-label={`Copy ${song.title}`}>
+            {copied ? <Check size={17} /> : <Copy size={17} />}
+          </button>
         </div>
-        <span className="tier">Tier {song.tier || 2}</span>
+        <div className="timeline-row">
+          <span>{formatTime(currentTime)}</span>
+          <input
+            aria-label={`Seek ${song.title}`}
+            type="range"
+            min="0"
+            max={Math.max(1, Math.floor(duration))}
+            value={Math.min(Math.floor(currentTime), Math.floor(duration))}
+            onChange={seek}
+            style={{ "--value": `${progress}%` }}
+            disabled={!song.videoId || !isReady}
+          />
+          <span>{formatTime(duration)}</span>
+        </div>
       </div>
-      {song.videoId ? (
-        <iframe
-          title={`${song.title} by ${song.artist}`}
-          src={`https://www.youtube.com/embed/${song.videoId}`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      ) : (
-        <a className="youtube-link" href={`https://www.youtube.com/results?search_query=${encodeURIComponent(`${song.title} ${song.artist}`)}`} target="_blank" rel="noreferrer">
-          Search on YouTube
-        </a>
-      )}
-      <div className="song-foot">
-        <span>{song.language || "Music"}</span>
-        <p>{song.reason || "Picked for this travel mood."}</p>
-      </div>
+      {song.videoId ? <div className="youtube-audio" id={playerNodeId} aria-hidden="true" /> : null}
     </article>
   );
+}
+
+async function detectCountry(photos) {
+  for (const photo of photos) {
+    const gps = await getGpsFromPhoto(photo.file);
+    if (!gps) continue;
+    try {
+      const place = await reverseGeocodeCountry(gps);
+      if (place) return place;
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function readPhotoPreview(file) {
+  return new Promise((resolve) => {
+    const previewUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      resolve({
+        id: `${file.name}-${file.lastModified}-${file.size}`,
+        file,
+        name: file.name,
+        previewUrl,
+        width: image.naturalWidth || 4,
+        height: image.naturalHeight || 3,
+      });
+    };
+    image.onerror = () => {
+      resolve({
+        id: `${file.name}-${file.lastModified}-${file.size}`,
+        file,
+        name: file.name,
+        previewUrl,
+        width: 4,
+        height: 3,
+      });
+    };
+    image.src = previewUrl;
+  });
+}
+
+function formatTime(seconds) {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = String(safeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${remainder}`;
+}
+
+let youtubeApiPromise;
+
+function loadYoutubeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (youtubeApiPromise) return youtubeApiPromise;
+
+  youtubeApiPromise = new Promise((resolve) => {
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previous?.();
+      resolve(window.YT);
+    };
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.async = true;
+    document.head.appendChild(script);
+  });
+
+  return youtubeApiPromise;
 }
 
 export default App;
