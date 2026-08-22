@@ -29,15 +29,14 @@ export async function onRequestPost({ request, env }) {
   try {
     const body = await request.json();
     const provider = body.model === "qwen" ? "qwen" : "gemini";
-    const tierOneCount = Number(body.tierOneCount);
 
     if (provider === "qwen") {
       if (!qwenApiKey(env)) return json({ songs: demoSongs(body), demo: true });
-      return json({ songs: normalizeSongs(await callQwenSongs(env, body), tierOneCount), demo: false });
+      return json({ songs: normalizeSongs(await callQwenSongs(env, body)), demo: false });
     }
 
     if (!env.GEMINI_API_KEY) return json({ songs: demoSongs(body), demo: true });
-    return json({ songs: normalizeSongs(await callGeminiSongs(env, body), tierOneCount), demo: false });
+    return json({ songs: normalizeSongs(await callGeminiSongs(env, body)), demo: false });
   } catch (error) {
     return json({ error: error.message || "Song request failed." }, 500);
   }
@@ -86,90 +85,92 @@ async function callQwenSongs(env, body) {
 }
 
 function songPrompt(body) {
+  const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
+  const countryNames = rawCountries
+    .map((c) => (typeof c === "string" ? c : c?.name))
+    .filter(Boolean);
   const languagesList = Array.isArray(body.languages) && body.languages.length > 0
     ? body.languages
     : ["English", "local music"];
   const languagesStr = languagesList.join(", ");
-  const country = body.country || "unknown";
+  const photoCountry = body.country || "unknown";
   const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
-  const limit = Math.max(1, Math.min(8, Number(body.tierOneCount) || 5));
+
+  const originInstruction = countryNames.length > 0
+    ? `Choose songs that originate from: ${countryNames.join(", ")}. Preferred languages: ${languagesStr}. The photos were taken in ${photoCountry}; match the scene mood but do not let the photo location drive the song origin.`
+    : `Choose well-known international songs. Preferred languages: ${languagesStr}.`;
 
   return `Return JSON only with {"songs":[...]}.
 Suggest 8 real songs for travel photos.
-Country: ${country}
+${originInstruction}
 Energy: ${body.energy} (15 Calm, 40 Easy, 65 Lively, 90 High)
 Style: ${body.style} (20 Traditional, 50 Mixed, 80 Modern)
-Preferred languages: ${languagesStr}
-Tier-1 count: ${limit}
 User image notes: ${imageNotes || "none"}
 Mood read: ${JSON.stringify(body.mood || {})}
-Each song object must be {"title": string, "artist": string, "language": string, "tier": 1 or 2, "reason": string}.
-Prioritize ${languagesStr} and music from ${country} for the first ${limit} songs before wider global picks. Avoid made-up songs.`;
+Each song object must be {"title": string, "artist": string, "language": string, "reason": string}.
+Avoid made-up songs.`;
 }
 
-function normalizeSongs(songs, tierOneCount = 5) {
+function normalizeSongs(songs) {
   const clean = Array.isArray(songs) ? songs : [];
-  const limit = Math.max(1, Math.min(8, Number(tierOneCount) || 5));
   return clean
     .filter((song) => song?.title && song?.artist)
     .slice(0, 8)
-    .map((song, index) => ({
+    .map((song) => ({
       title: String(song.title).trim(),
       artist: String(song.artist).trim(),
       language: String(song.language || "Music").trim(),
-      tier: index < limit ? 1 : 2,
       reason: String(song.reason || "Fits the selected travel mood.").trim(),
     }));
 }
 
 function demoSongs(body) {
-  const country = body.country || "Sri Lanka";
-  const local = Array.isArray(body.languages) ? body.languages[0] || "Local" : "Local";
+  const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
+  const countryNames = rawCountries
+    .map((c) => (typeof c === "string" ? c : c?.name))
+    .filter(Boolean);
+  const primaryCountry = countryNames[0] || body.country || "Sri Lanka";
+  const local = Array.isArray(body.languages) && body.languages[0] ? body.languages[0] : "Local";
   return [
     {
       title: "Manike Mage Hithe",
       artist: "Yohani",
       language: "Sinhala",
-      tier: 1,
       reason: "Bright Sinhala pop for warm travel clips.",
     },
     {
       title: "Paradise",
       artist: "Coldplay",
       language: "English",
-      tier: 1,
       reason: "Open, scenic, and easy to pair with landscapes.",
     },
     {
       title: "Sunflower",
       artist: "Post Malone and Swae Lee",
       language: "English",
-      tier: 1,
       reason: "Soft mainstream energy for relaxed footage.",
     },
     {
       title: "A Sky Full of Stars",
       artist: "Coldplay",
       language: "English",
-      tier: 1,
       reason: "Builds energy without losing the travel feel.",
     },
     {
       title: "Shape of You",
       artist: "Ed Sheeran",
       language: "English",
-      tier: 1,
       reason: "Mainstream rhythm for lively photo batches.",
     },
     {
-      title: `${country} travel music`,
+      title: `${primaryCountry} travel music`,
       artist: "Local artists",
       language: local,
-      tier: 2,
       reason: "Use as a local search seed when a provider key is missing.",
     },
   ];
 }
+
 
 function parseJsonText(text) {
   if (!text) return null;
