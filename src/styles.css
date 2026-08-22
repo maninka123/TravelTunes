@@ -480,12 +480,125 @@ h1 {
   font-weight: 850;
 }
 
+.country-chip {
+  gap: 8px;
+}
+
+.country-chip .fi {
+  font-size: 1.1rem;
+  border-radius: 2px;
+}
+
+.field-caption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.helper-text {
+  margin: 10px 0 6px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-style: italic;
+}
+
+.add-country-row {
+  margin-top: 10px;
+}
+
+.country-picker.compact .country-input-shell {
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--paper-soft);
+}
+
+.country-picker.compact .country-flag {
+  width: 26px;
+  height: 26px;
+  font-size: 1rem;
+}
+
+.country-picker.compact input {
+  font-size: 0.88rem;
+}
+
+.languages-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-soft);
+  color: #3b5062;
+  font-size: 0.86rem;
+  font-weight: 750;
+  text-align: left;
+}
+
+.languages-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.languages-toggle svg {
+  flex: 0 0 auto;
+  color: var(--teal);
+}
+
+.languages-editor {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.recent-languages-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.recent-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 4px;
+}
+
+.chip-ghost {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.chip-ghost:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
 .inline-form {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
   margin-top: 12px;
 }
+
 
 .inline-form input {
   width: 100%;

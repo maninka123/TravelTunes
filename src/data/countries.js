@@ -186,6 +186,10 @@ export function flagForCountry(countryName) {
   return COUNTRY_OPTIONS.find((country) => country.name === countryName)?.flag || "🌍";
 }
 
+export function codeForCountry(countryName) {
+  return COUNTRY_OPTIONS.find((country) => country.name === countryName)?.code || "";
+}
+
 export function defaultLanguagesFor(country) {
   const localLanguages = COUNTRY_LANGUAGES[country];
   if (localLanguages && localLanguages.length > 0) {
@@ -193,4 +197,6 @@ export function defaultLanguagesFor(country) {
   }
   return ["English"];
 }
+
+
 
