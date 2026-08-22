@@ -20,55 +20,46 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { COUNTRY_OPTIONS, defaultLanguagesFor, flagForCountry } from "./data/countries";
-import { postJson, readFileAsPayload } from "./lib/api";
+import { postJson, readFileAsVisionPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
 const MAX_PHOTOS = 4;
 
-const DEMO_SONGS = [
-  {
-    title: "Manike Mage Hithe",
-    artist: "Yohani",
-    language: "Sinhala",
-    tier: 1,
-    reason: "Bright Sinhala pop that fits sunlit travel memories.",
-  },
-  {
-    title: "Ayubowan",
-    artist: "Dhanith Sri",
-    language: "Sinhala",
-    tier: 1,
-    reason: "Warm local energy for Sri Lankan travel moments.",
-  },
-  {
-    title: "Rata Riduna",
-    artist: "Bathiya & Santhush",
-    language: "Sinhala",
-    tier: 1,
-    reason: "A polished regional pick with movement and nostalgia.",
-  },
-  {
-    title: "Saheli",
-    artist: "Nanda Malini",
-    language: "Sinhala",
-    tier: 2,
-    reason: "A softer classic for slower scenic clips.",
-  },
+const ENERGY_OPTIONS = [
+  { label: "Calm", value: 15 },
+  { label: "Easy", value: 40 },
+  { label: "Lively", value: 65 },
+  { label: "High", value: 90 },
+];
+
+const STYLE_OPTIONS = [
+  { label: "Traditional", value: 20 },
+  { label: "Mixed", value: 50 },
+  { label: "Modern", value: 80 },
+];
+
+const MIX_OPTIONS = [
+  { label: "Mostly global", value: 2 },
+  { label: "Balanced", value: 5 },
+  { label: "Mostly local", value: 7 },
 ];
 
 function App() {
   const [photos, setPhotos] = useState([]);
   const [country, setCountry] = useState("Sri Lanka");
   const [detectedCountry, setDetectedCountry] = useState("");
-  const [energy, setEnergy] = useState(62);
-  const [style, setStyle] = useState(44);
+  const [energy, setEnergy] = useState(40);
+  const [detectedEnergy, setDetectedEnergy] = useState(null);
+  const [style, setStyle] = useState(50);
   const [model, setModel] = useState("gemini");
-  const [languages, setLanguages] = useState(defaultLanguagesFor("Sri Lanka"));
+  const [customLanguages, setCustomLanguages] = useState([]);
+  const [languages, setLanguages] = useState(() => defaultLanguagesFor("Sri Lanka"));
   const [customLanguage, setCustomLanguage] = useState("");
   const [tierOneCount, setTierOneCount] = useState(5);
   const [imageNotes, setImageNotes] = useState("");
   const [mood, setMood] = useState(null);
-  const [songs, setSongs] = useState(DEMO_SONGS);
+  const [songs, setSongs] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState("");
   const [activeSongKey, setActiveSongKey] = useState("");
@@ -76,18 +67,27 @@ function App() {
   const canRun = photos.length > 0 && country;
   const modelLabel = model === "gemini" ? "Gemini" : "Qwen";
 
-  useEffect(() => {
-    setLanguages((current) => {
-      const next = defaultLanguagesFor(country);
-      return Array.from(new Set([...next, ...current]));
-    });
-  }, [country]);
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
 
+  // Unmount-only cleanup so adding photos doesn't revoke existing previews
   useEffect(() => {
     return () => {
-      photos.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
+      photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
     };
-  }, [photos]);
+  }, []);
+
+  const prevCountryRef = useRef(country);
+
+  // Update languages when country changes while preserving user-added custom languages
+  useEffect(() => {
+    if (prevCountryRef.current !== country) {
+      prevCountryRef.current = country;
+      const defaults = defaultLanguagesFor(country);
+      setLanguages(Array.from(new Set([...defaults, ...customLanguages])));
+    }
+  }, [country, customLanguages]);
+
 
   async function handlePhotos(event) {
     const selected = Array.from(event.target.files || []);
@@ -101,6 +101,7 @@ function App() {
       return [...current, ...addedPhotos];
     });
     setMood(null);
+    setDetectedEnergy(null);
     setStatus("");
 
     const detected = await detectCountry(nextPhotos);
@@ -121,6 +122,7 @@ function App() {
       return current.filter((photo) => photo.id !== photoId);
     });
     setMood(null);
+    setDetectedEnergy(null);
     setStatus("");
   }
 
@@ -130,6 +132,7 @@ function App() {
       return [];
     });
     setMood(null);
+    setDetectedEnergy(null);
     setDetectedCountry("");
     setStatus("");
   }
@@ -137,24 +140,34 @@ function App() {
   function addLanguage() {
     const value = customLanguage.trim();
     if (!value) return;
-    setLanguages((current) => Array.from(new Set([...current, value])));
+    setCustomLanguages((prev) => Array.from(new Set([...prev, value])));
+    setLanguages((prev) => Array.from(new Set([...prev, value])));
     setCustomLanguage("");
   }
 
+
   function removeLanguage(language) {
-    setLanguages((current) => current.filter((item) => item !== language));
+    setCustomLanguages((prev) => prev.filter((item) => item !== language));
+    setLanguages((prev) => prev.filter((item) => item !== language));
+  }
+
+  function handleSongUpdate(songKey, updates) {
+    setSongs((current) =>
+      current.map((song, index) => {
+        const key = `${song.title}-${song.artist}-${index}`;
+        return key === songKey ? { ...song, ...updates } : song;
+      }),
+    );
   }
 
   async function findSongs() {
     if (!canRun) return;
     setBusy("songs");
     try {
-      // First read the photo mood, then use it to shape the song list — one tap.
       let currentMood = mood;
-      let effectiveEnergy = energy;
       setStatus(`Reading photo mood with ${modelLabel}...`);
       try {
-        const imagePayloads = await Promise.all(photos.map((photo) => readFileAsPayload(photo.file)));
+        const imagePayloads = await Promise.all(photos.map((photo) => readFileAsVisionPayload(photo.file)));
         const visionData = await postJson("/api/vision", {
           model,
           country,
@@ -165,19 +178,18 @@ function App() {
         });
         currentMood = visionData.mood;
         setMood(visionData.mood);
-        if (Number.isFinite(visionData.mood?.energy)) {
-          effectiveEnergy = visionData.mood.energy;
-          setEnergy(visionData.mood.energy);
+        if (visionData.mood?.energy != null && Number.isFinite(Number(visionData.mood.energy))) {
+          setDetectedEnergy(Math.round(Number(visionData.mood.energy)));
         }
       } catch {
-        // Mood read is best-effort; keep going with the current settings.
+        // Mood read is best-effort; keep going with current user settings
       }
 
       setStatus("Building song list...");
       const songData = await postJson("/api/songs", {
         model,
         country,
-        energy: effectiveEnergy,
+        energy,
         style,
         languages,
         tierOneCount,
@@ -185,21 +197,8 @@ function App() {
         mood: currentMood,
       });
 
-      setStatus("Checking YouTube audio sources...");
-      const hydrated = await Promise.all(
-        songData.songs.map(async (song) => {
-          try {
-            const video = await postJson("/api/youtube", {
-              query: `${song.title} ${song.artist}`,
-            });
-            return { ...song, ...video };
-          } catch {
-            return song;
-          }
-        }),
-      );
-
-      setSongs(hydrated);
+      setSongs(songData.songs || []);
+      setHasSearched(true);
       setStatus(songData.demo ? "Demo song list shown because a model key is missing." : "Song list ready.");
     } catch (error) {
       setStatus(error.message);
@@ -207,6 +206,34 @@ function App() {
       setBusy("");
     }
   }
+
+  // Summary line directly above Find songs button
+  const summaryLine = useMemo(() => {
+    const langList = languages.length > 0 ? languages : ["local music"];
+    let langText = "";
+    if (langList.length === 1) {
+      langText = langList[0];
+    } else if (langList.length === 2) {
+      langText = `${langList[0]} or ${langList[1]}`;
+    } else {
+      langText = `${langList.slice(0, -1).join(", ")} or ${langList[langList.length - 1]}`;
+    }
+
+    const t1 = Math.min(8, Math.max(0, tierOneCount));
+    const wider = 8 - t1;
+
+    if (t1 === 8) {
+      return `8 of 8 songs in ${langText} from ${country}.`;
+    }
+    if (t1 === 0) {
+      return `8 wider picks.`;
+    }
+    return `${t1} of 8 songs in ${langText} from ${country}, ${wider} wider ${wider === 1 ? "pick" : "picks"}.`;
+  }, [languages, country, tierOneCount]);
+
+  // Group results into tier 1 ("From {country}") and tier 2 ("Wider picks")
+  const tierOneSongs = useMemo(() => songs.filter((s) => Number(s.tier) === 1), [songs]);
+  const tierTwoSongs = useMemo(() => songs.filter((s) => Number(s.tier) !== 1), [songs]);
 
   return (
     <main className="app-shell">
@@ -258,29 +285,34 @@ function App() {
         </section>
 
         <section className="surface controls-surface">
-          <PremiumSlider
+          <ChoiceRow
             icon={<Sparkles size={18} />}
             label="Energy"
-            left="Calm"
-            right="High"
+            badge={detectedEnergy != null ? `photo reads ${detectedEnergy}` : null}
+            options={ENERGY_OPTIONS}
             value={energy}
             onChange={setEnergy}
           />
-          <PremiumSlider
+          <ChoiceRow
             icon={<WandSparkles size={18} />}
             label="Style"
-            left="Traditional"
-            right="Modern"
+            options={STYLE_OPTIONS}
             value={style}
             onChange={setStyle}
           />
         </section>
 
         <section className="surface">
-          <SectionHeading icon={<Globe2 size={18} />} label="Languages" meta={`${tierOneCount} tier-1`} />
+          <SectionHeading icon={<Globe2 size={18} />} label="Languages" />
           <div className="chip-row">
             {languages.map((language) => (
-              <button className="chip selected" type="button" key={language} onClick={() => removeLanguage(language)}>
+              <button
+                className="chip selected"
+                type="button"
+                key={language}
+                onClick={() => removeLanguage(language)}
+                aria-label={`Remove ${language}`}
+              >
                 {language}
                 <X size={14} />
               </button>
@@ -293,57 +325,98 @@ function App() {
               onKeyDown={(event) => {
                 if (event.key === "Enter") addLanguage();
               }}
-              placeholder="Add language or country"
+              placeholder="Add a language"
             />
             <button type="button" onClick={addLanguage}>Add</button>
           </div>
-          <input
-            aria-label="Tier one count"
-            className="tier-range"
-            type="range"
-            min="2"
-            max="8"
-            value={tierOneCount}
-            onChange={(event) => setTierOneCount(Number(event.target.value))}
-          />
+          <div style={{ marginTop: "16px" }}>
+            <ChoiceRow
+              icon={<Music2 size={16} />}
+              label="Music mix"
+              options={MIX_OPTIONS}
+              value={tierOneCount}
+              onChange={setTierOneCount}
+            />
+          </div>
         </section>
 
         <section className="surface model-surface">
           <SectionHeading icon={<BrainCircuit size={18} />} label="Model" />
-          <div className="segment" role="tablist" aria-label="Vision model">
-            <button className={model === "qwen" ? "active" : ""} type="button" onClick={() => setModel("qwen")}>
+          <div className="segment" role="radiogroup" aria-label="Vision model">
+            <button
+              className={model === "qwen" ? "active" : ""}
+              type="button"
+              role="radio"
+              aria-checked={model === "qwen"}
+              onClick={() => setModel("qwen")}
+            >
               <Bot size={18} />
               Qwen
             </button>
-            <button className={model === "gemini" ? "active" : ""} type="button" onClick={() => setModel("gemini")}>
+            <button
+              className={model === "gemini" ? "active" : ""}
+              type="button"
+              role="radio"
+              aria-checked={model === "gemini"}
+              onClick={() => setModel("gemini")}
+            >
               <Sparkles size={18} />
               Gemini
             </button>
           </div>
-          {mood ? (
-            <div className="mood-strip">
-              <strong>{mood.setting || "Travel scene"}</strong>
-              <span>{mood.mood || "balanced, scenic, warm"}</span>
-            </div>
-          ) : null}
+          {mood ? <MoodReadout mood={mood} /> : null}
         </section>
 
         <section className="songs" aria-label="Song results">
-          <div className="song-list">
-            {songs.map((song, index) => {
-              const songKey = `${song.title}-${song.artist}-${index}`;
-              return (
-                <SongRow
-                  song={song}
-                  songKey={songKey}
-                  key={songKey}
-                  activeSongKey={activeSongKey}
-                  onActiveSongChange={setActiveSongKey}
-                />
-              );
-            })}
-          </div>
+          {!hasSearched && songs.length === 0 ? (
+            <div className="empty-state">
+              <Music2 size={32} strokeWidth={1.5} />
+              <p>Add a travel photo and tap Find songs to get recommendations.</p>
+            </div>
+          ) : (
+            <div className="song-list">
+              {tierOneSongs.length > 0 ? (
+                <div className="song-group">
+                  <h2 className="song-group-heading">From {country}</h2>
+                  {tierOneSongs.map((song, index) => {
+                    const songKey = `${song.title}-${song.artist}-t1-${index}`;
+                    return (
+                      <SongRow
+                        song={song}
+                        songKey={songKey}
+                        key={songKey}
+                        activeSongKey={activeSongKey}
+                        onActiveSongChange={setActiveSongKey}
+                        onSongUpdate={handleSongUpdate}
+                      />
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {tierTwoSongs.length > 0 ? (
+                <div className="song-group">
+                  <h2 className="song-group-heading">Wider picks</h2>
+                  {tierTwoSongs.map((song, index) => {
+                    const songKey = `${song.title}-${song.artist}-t2-${index}`;
+                    return (
+                      <SongRow
+                        song={song}
+                        songKey={songKey}
+                        key={songKey}
+                        activeSongKey={activeSongKey}
+                        onActiveSongChange={setActiveSongKey}
+                        onSongUpdate={handleSongUpdate}
+                      />
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          )}
         </section>
+
+        <p className="songs-summary">{summaryLine}</p>
 
         <button className="primary-action" type="button" onClick={findSongs} disabled={!canRun || busy === "songs"}>
           {busy === "songs" ? <Loader2 className="spin" size={19} /> : <Music2 size={19} />}
@@ -353,6 +426,55 @@ function App() {
         {status ? <p className="status">{status}</p> : null}
       </section>
     </main>
+  );
+}
+
+function ChoiceRow({ icon, label, badge, options, value, onChange }) {
+  return (
+    <div className="choice-block">
+      <span className="slider-title">
+        <span>
+          {icon}
+          {label}
+        </span>
+        {badge ? <span className="detected-badge">{badge}</span> : null}
+      </span>
+      <div className="segment" role="radiogroup" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            role="radio"
+            aria-checked={value === option.value}
+            className={value === option.value ? "active" : ""}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MoodReadout({ mood }) {
+  const palette = Array.isArray(mood.palette)
+    ? mood.palette.map((item) => String(item).trim()).filter(Boolean).slice(0, 5)
+    : [];
+
+  return (
+    <div className="mood-strip">
+      <strong>{mood.setting || "Travel scene"}</strong>
+      <span>{mood.mood || "balanced, scenic, warm"}</span>
+      {mood.notes ? <span className="mood-notes">{mood.notes}</span> : null}
+      {palette.length ? (
+        <div className="mood-palette">
+          {palette.map((color) => (
+            <span className="mood-swatch" key={color}>{color}</span>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -476,44 +598,20 @@ function CountryPicker({ value, onChange }) {
   );
 }
 
-function PremiumSlider({ icon, label, left, right, value, onChange }) {
-  return (
-    <label className="slider-block">
-      <span className="slider-title">
-        <span>
-          {icon}
-          {label}
-        </span>
-        <strong>{value}</strong>
-      </span>
-      <input
-        type="range"
-        min="0"
-        max="100"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        style={{ "--value": `${value}%` }}
-      />
-      <span className="slider-labels">
-        <small>{left}</small>
-        <small>{right}</small>
-      </span>
-    </label>
-  );
-}
-
-function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
+function SongRow({ song, songKey, activeSongKey, onActiveSongChange, onSongUpdate }) {
   const playerRef = useRef(null);
   const playerNodeId = useMemo(() => `yt-${songKey.replace(/[^a-z0-9]+/gi, "-")}`, [songKey]);
   const isActive = activeSongKey === songKey;
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [shouldMountPlayer, setShouldMountPlayer] = useState(false);
   const [duration, setDuration] = useState(180);
   const [currentTime, setCurrentTime] = useState(0);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!song.videoId) return undefined;
+    if (!song.videoId || !shouldMountPlayer) return undefined;
     let cancelled = false;
     loadYoutubeApi().then((YT) => {
       if (cancelled || playerRef.current) return;
@@ -533,6 +631,7 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
             setIsReady(true);
             const nextDuration = event.target.getDuration();
             if (Number.isFinite(nextDuration) && nextDuration > 0) setDuration(nextDuration);
+            event.target.playVideo();
           },
           onStateChange: (event) => {
             const playing = event.data === YT.PlayerState.PLAYING;
@@ -549,7 +648,7 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
         playerRef.current = null;
       }
     };
-  }, [onActiveSongChange, playerNodeId, song.videoId, songKey]);
+  }, [onActiveSongChange, playerNodeId, shouldMountPlayer, song.videoId, songKey]);
 
   useEffect(() => {
     if (activeSongKey === songKey || !playerRef.current?.pauseVideo) return;
@@ -570,13 +669,38 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
     return () => window.clearInterval(timer);
   }, [isPlaying]);
 
-  function togglePlay() {
-    if (!song.videoId) {
-      onActiveSongChange(songKey);
+  async function togglePlay() {
+    onActiveSongChange(songKey);
+
+    // Look up video on first play if not resolved yet
+    if (!song.videoId && !song.audioResolved) {
+      setIsLoadingAudio(true);
+      try {
+        const video = await postJson("/api/youtube", {
+          title: song.title,
+          artist: song.artist,
+          query: `${song.title} ${song.artist}`,
+        });
+        onSongUpdate(songKey, { ...video, audioResolved: true });
+        if (video.videoId) {
+          setShouldMountPlayer(true);
+        }
+      } catch {
+        onSongUpdate(songKey, { audioResolved: true });
+      } finally {
+        setIsLoadingAudio(false);
+      }
       return;
     }
+
+    if (!song.videoId) return;
+
+    if (!shouldMountPlayer) {
+      setShouldMountPlayer(true);
+      return;
+    }
+
     const player = playerRef.current;
-    onActiveSongChange(songKey);
     if (!player || !isReady) return;
     if (isPlaying) {
       player.pauseVideo();
@@ -610,16 +734,24 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
         className="play-button"
         type="button"
         onClick={togglePlay}
+        disabled={isLoadingAudio}
         aria-label={`${isPlaying ? "Pause" : "Play"} ${song.title}`}
-        title={song.videoId ? "Play in app" : "Audio source not available"}
+        title={song.videoId ? "Play in app" : (song.audioResolved ? "Audio source not available" : "Play track")}
       >
-        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+        {isLoadingAudio ? (
+          <Loader2 size={18} className="spin" />
+        ) : isPlaying ? (
+          <Pause size={20} fill="currentColor" />
+        ) : (
+          <Play size={18} fill="currentColor" />
+        )}
       </button>
       <div className="song-main">
         <div className="song-line">
           <div className="song-text">
             <h3>{song.title}</h3>
             <p>{song.artist}</p>
+            {song.reason ? <p className="song-reason">{song.reason}</p> : null}
           </div>
           <div className="song-tags">
             {languages.map((language) => (
@@ -644,9 +776,9 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange }) {
           />
           <span>{formatTime(duration)}</span>
         </div>
-        {isActive && !song.videoId ? <p className="audio-note">Audio source not available yet.</p> : null}
+        {isActive && song.audioResolved && !song.videoId ? <p className="audio-note">Audio source not available yet.</p> : null}
       </div>
-      {song.videoId ? <div className="youtube-audio" id={playerNodeId} aria-hidden="true" /> : null}
+      {song.videoId && shouldMountPlayer ? <div className="youtube-audio" id={playerNodeId} aria-hidden="true" /> : null}
     </article>
   );
 }
@@ -659,7 +791,7 @@ async function detectCountry(photos) {
       const place = await reverseGeocodeCountry(gps);
       if (place) return place;
     } catch {
-      return "";
+      continue;
     }
   }
   return "";

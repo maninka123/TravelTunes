@@ -1,4 +1,5 @@
 import * as exifr from "exifr";
+import { postJson } from "./api";
 
 export async function getGpsFromPhoto(file) {
   try {
@@ -14,20 +15,11 @@ export async function getGpsFromPhoto(file) {
 }
 
 export async function reverseGeocodeCountry({ latitude, longitude }) {
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    lat: String(latitude),
-    lon: String(longitude),
-    zoom: "3",
-    addressdetails: "1",
-    "accept-language": "en",
-  });
-
-  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`);
-  if (!response.ok) {
-    throw new Error("Could not detect country from photo GPS");
+  try {
+    const data = await postJson("/api/geocode", { latitude, longitude });
+    return data?.country || null;
+  } catch {
+    return null;
   }
-
-  const data = await response.json();
-  return data?.address?.country || null;
 }
+

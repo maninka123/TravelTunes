@@ -1,26 +1,43 @@
-const jsonHeaders = {
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+function isSameOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    return originUrl.origin === requestUrl.origin;
+  } catch {
+    return false;
+  }
+}
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: jsonHeaders });
+export async function onRequestOptions({ request }) {
+  if (!isSameOrigin(request)) {
+    return new Response(null, { status: 403 });
+  }
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }
 
 export async function onRequestPost({ request, env }) {
+  if (!isSameOrigin(request)) {
+    return json({ error: "Forbidden" }, 403);
+  }
   try {
     const body = await request.json();
     const provider = body.model === "qwen" ? "qwen" : "gemini";
+    const tierOneCount = Number(body.tierOneCount);
 
     if (provider === "qwen") {
       if (!qwenApiKey(env)) return json({ songs: demoSongs(body), demo: true });
-      return json({ songs: normalizeSongs(await callQwenSongs(env, body)), demo: false });
+      return json({ songs: normalizeSongs(await callQwenSongs(env, body), tierOneCount), demo: false });
     }
 
     if (!env.GEMINI_API_KEY) return json({ songs: demoSongs(body), demo: true });
-    return json({ songs: normalizeSongs(await callGeminiSongs(env, body)), demo: false });
+    return json({ songs: normalizeSongs(await callGeminiSongs(env, body), tierOneCount), demo: false });
   } catch (error) {
     return json({ error: error.message || "Song request failed." }, 500);
   }
@@ -57,7 +74,7 @@ async function callQwenSongs(env, body) {
     },
     body: JSON.stringify({
       model,
-      enable_thinking: true,
+      enable_thinking: false,
       response_format: { type: "json_object" },
       messages: [{ role: "user", content: songPrompt(body) }],
     }),
@@ -69,23 +86,30 @@ async function callQwenSongs(env, body) {
 }
 
 function songPrompt(body) {
-  const languages = Array.isArray(body.languages) ? body.languages.join(", ") : "English, Sinhala, local language";
+  const languagesList = Array.isArray(body.languages) && body.languages.length > 0
+    ? body.languages
+    : ["English", "local music"];
+  const languagesStr = languagesList.join(", ");
+  const country = body.country || "unknown";
   const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
+  const limit = Math.max(1, Math.min(8, Number(body.tierOneCount) || 5));
+
   return `Return JSON only with {"songs":[...]}.
 Suggest 8 real songs for travel photos.
-Country: ${body.country || "unknown"}
-Energy slider 0 quiet to 100 energetic: ${body.energy}
-Style slider 0 traditional to 100 mainstream: ${body.style}
-Tier-1 languages/countries: ${languages}
-Preferred tier-1 count: ${body.tierOneCount || 5}
+Country: ${country}
+Energy: ${body.energy} (15 Calm, 40 Easy, 65 Lively, 90 High)
+Style: ${body.style} (20 Traditional, 50 Mixed, 80 Modern)
+Preferred languages: ${languagesStr}
+Tier-1 count: ${limit}
 User image notes: ${imageNotes || "none"}
 Mood read: ${JSON.stringify(body.mood || {})}
 Each song object must be {"title": string, "artist": string, "language": string, "tier": 1 or 2, "reason": string}.
-Prioritize English, Sinhala, and the country's local music before wider global picks. Avoid made-up songs.`;
+Prioritize ${languagesStr} and music from ${country} for the first ${limit} songs before wider global picks. Avoid made-up songs.`;
 }
 
-function normalizeSongs(songs) {
+function normalizeSongs(songs, tierOneCount = 5) {
   const clean = Array.isArray(songs) ? songs : [];
+  const limit = Math.max(1, Math.min(8, Number(tierOneCount) || 5));
   return clean
     .filter((song) => song?.title && song?.artist)
     .slice(0, 8)
@@ -93,7 +117,7 @@ function normalizeSongs(songs) {
       title: String(song.title).trim(),
       artist: String(song.artist).trim(),
       language: String(song.language || "Music").trim(),
-      tier: Number(song.tier) === 1 || index < 5 ? 1 : 2,
+      tier: index < limit ? 1 : 2,
       reason: String(song.reason || "Fits the selected travel mood.").trim(),
     }));
 }
@@ -176,5 +200,10 @@ function qwenErrorMessage(data, fallback) {
 }
 
 function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
+
+

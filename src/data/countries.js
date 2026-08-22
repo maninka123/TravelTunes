@@ -187,6 +187,10 @@ export function flagForCountry(countryName) {
 }
 
 export function defaultLanguagesFor(country) {
-  const localLanguages = COUNTRY_LANGUAGES[country] || [];
-  return Array.from(new Set(["English", "Sinhala", ...localLanguages]));
+  const localLanguages = COUNTRY_LANGUAGES[country];
+  if (localLanguages && localLanguages.length > 0) {
+    return Array.from(new Set([...localLanguages, "English"]));
+  }
+  return ["English"];
 }
+
