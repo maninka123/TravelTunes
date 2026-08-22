@@ -22,10 +22,10 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 - Upload up to 4 travel photos with a dynamic preview layout.
 - Detect the photo country from EXIF GPS when available.
 - Search all countries with flag suggestions and manual override.
-- Tune the vibe with Energy and Style sliders.
-- Prioritize English, Sinhala, and local-language music.
+- Tune the vibe with segmented button groups: Energy (Calm / Easy / Lively / High), Style (Traditional / Mixed / Modern), and Music Mix (Mostly global / Balanced / Mostly local).
+- Prioritize custom and local-language music dynamically from language chips.
 - Choose Qwen or Gemini for photo mood and song generation.
-- Play songs in an audio-first row UI with a seek timeline.
+- Play songs with lazy on-demand YouTube lookup, caching, and seek timeline.
 - Copy individual song names from each result row.
 - Runs on Cloudflare Pages + Functions so API keys stay server-side.
 
@@ -34,9 +34,9 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 - React 18 + Vite
 - Cloudflare Pages + Pages Functions
 - `exifr` for client-side GPS metadata
-- OpenStreetMap Nominatim for reverse geocoding
+- OpenStreetMap Nominatim reverse geocoding proxied via `/api/geocode`
 - Gemini + Qwen/DashScope model routes
-- YouTube Data API search for playable tracks
+- YouTube Data API search with Cloudflare KV caching (`YT_CACHE`)
 
 ## 🚀 Local Development
 
@@ -78,6 +78,23 @@ QWEN_MODEL
 QWEN_VISION_MODEL
 QWEN_TEXT_MODEL
 ```
+
+## 📦 Cloudflare KV Caching
+
+Create the KV namespace for YouTube search results:
+
+```bash
+npx wrangler kv:namespace create YT_CACHE
+```
+
+Add the generated namespace ID to `wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "YT_CACHE"
+id = "<your-namespace-id>"
+```
+
 
 ## ☁️ Cloudflare Pages Deploy
 
