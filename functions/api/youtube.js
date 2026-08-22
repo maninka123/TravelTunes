@@ -1,4 +1,15 @@
+const MAX_MEMORY_CACHE = 300;
 const memoryCache = new Map();
+
+function setMemoryCache(key, value) {
+  if (memoryCache.has(key)) {
+    memoryCache.delete(key);
+  } else if (memoryCache.size >= MAX_MEMORY_CACHE) {
+    const oldestKey = memoryCache.keys().next().value;
+    if (oldestKey !== undefined) memoryCache.delete(oldestKey);
+  }
+  memoryCache.set(key, value);
+}
 
 function isSameOrigin(request) {
   const origin = request.headers.get("Origin");
@@ -46,13 +57,14 @@ export async function onRequestPost({ request, env }) {
       try {
         const cached = await kv.get(cacheKey, "json");
         if (cached) {
-          memoryCache.set(cacheKey, cached);
+          setMemoryCache(cacheKey, cached);
           return json(cached);
         }
       } catch {
         // KV read failure is non-fatal
       }
     }
+
 
     if (!env.YOUTUBE_API_KEY) {
       const demoResult = {
@@ -84,7 +96,8 @@ export async function onRequestPost({ request, env }) {
       youtubeUrl: item?.id?.videoId ? `https://www.youtube.com/watch?v=${item.id.videoId}` : null,
     };
 
-    memoryCache.set(cacheKey, result);
+    setMemoryCache(cacheKey, result);
+
 
     if (kv && result.videoId) {
       try {
