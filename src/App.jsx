@@ -77,11 +77,17 @@ function App() {
     };
   }, []);
 
+  const prevCountryRef = useRef(country);
+
   // Update languages when country changes while preserving user-added custom languages
   useEffect(() => {
-    const defaults = defaultLanguagesFor(country);
-    setLanguages(Array.from(new Set([...defaults, ...customLanguages])));
+    if (prevCountryRef.current !== country) {
+      prevCountryRef.current = country;
+      const defaults = defaultLanguagesFor(country);
+      setLanguages(Array.from(new Set([...defaults, ...customLanguages])));
+    }
   }, [country, customLanguages]);
+
 
   async function handlePhotos(event) {
     const selected = Array.from(event.target.files || []);
@@ -135,8 +141,10 @@ function App() {
     const value = customLanguage.trim();
     if (!value) return;
     setCustomLanguages((prev) => Array.from(new Set([...prev, value])));
+    setLanguages((prev) => Array.from(new Set([...prev, value])));
     setCustomLanguage("");
   }
+
 
   function removeLanguage(language) {
     setCustomLanguages((prev) => prev.filter((item) => item !== language));
