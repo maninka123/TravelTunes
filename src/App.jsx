@@ -1,5 +1,5 @@
+import { SiDeepseek, SiGooglegemini, SiQwen } from "@icons-pack/react-simple-icons";
 import {
-  Bot,
   BrainCircuit,
   Camera,
   Check,
@@ -30,13 +30,45 @@ import { postJson, readFileAsVisionPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
 export function FlagIcon({ code, className = "" }) {
-  if (!code) return <span className={`country-flag-placeholder ${className}`.trim()}>🌍</span>;
-  return <span className={`fi fi-${String(code).toLowerCase()} ${className}`.trim()} aria-hidden="true" />;
+  if (!code) return null;
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${String(code).toLowerCase()}.png`}
+      srcSet={`https://flagcdn.com/w80/${String(code).toLowerCase()}.png 2x`}
+      alt=""
+      aria-hidden="true"
+      width={20}
+      height={15}
+      loading="lazy"
+      className={`flag-img ${className}`.trim()}
+    />
+  );
 }
 
 
 const MAX_PHOTOS = 4;
 const RECENT_LANG_KEY = "traveltunes_recent_languages";
+
+const MODEL_OPTIONS = [
+  {
+    id: "gemini",
+    label: "Gemini",
+    defaultModel: "gemini-3.1-flash-lite",
+    Icon: SiGooglegemini,
+  },
+  {
+    id: "qwen",
+    label: "Qwen",
+    defaultModel: "qwen3.5-flash",
+    Icon: SiQwen,
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    defaultModel: "deepseek-v4-flash-vision-exp",
+    Icon: SiDeepseek,
+  },
+];
 
 const ENERGY_OPTIONS = [
   { label: "Calm", value: 15 },
@@ -44,6 +76,7 @@ const ENERGY_OPTIONS = [
   { label: "Lively", value: 65 },
   { label: "High", value: 90 },
 ];
+
 
 const STYLE_OPTIONS = [
   { label: "Traditional", value: 20 },
@@ -85,7 +118,9 @@ function App() {
   const [activeSongKey, setActiveSongKey] = useState("");
 
   const canRun = photos.length > 0 && country;
-  const modelLabel = model === "gemini" ? "Gemini" : "Qwen";
+  const selectedModelOption = MODEL_OPTIONS.find((m) => m.id === model) || MODEL_OPTIONS[0];
+  const modelLabel = selectedModelOption.label;
+
 
   const photosRef = useRef(photos);
   photosRef.current = photos;
@@ -114,16 +149,26 @@ function App() {
 
     const detected = await detectCountry(nextPhotos);
     if (detected) {
+      const prevDetected = detectedCountry;
       setDetectedCountry(detected);
       setCountry(detected);
       const detectedCode = codeForCountry(detected);
       const newCountryObj = { name: detected, code: detectedCode };
-      setMusicCountries([newCountryObj]);
-      const newDefaults = defaultLanguagesFor(detected);
-      setLanguages(Array.from(new Set([...newDefaults, ...customLanguages])));
+
+      const shouldSeed =
+        musicCountries.length === 0 ||
+        (musicCountries.length === 1 &&
+          musicCountries[0].name === (prevDetected || "Sri Lanka"));
+
+      if (shouldSeed) {
+        setMusicCountries([newCountryObj]);
+        const newDefaults = defaultLanguagesFor(detected);
+        setLanguages(Array.from(new Set([...newDefaults, ...customLanguages])));
+      }
     } else {
       setDetectedCountry("");
     }
+
 
     event.target.value = "";
   }
@@ -459,29 +504,26 @@ function App() {
         <section className="surface model-surface">
           <SectionHeading icon={<BrainCircuit size={18} />} label="Model" />
           <div className="segment" role="radiogroup" aria-label="Vision model">
-            <button
-              className={model === "qwen" ? "active" : ""}
-              type="button"
-              role="radio"
-              aria-checked={model === "qwen"}
-              onClick={() => setModel("qwen")}
-            >
-              <Bot size={18} />
-              Qwen
-            </button>
-            <button
-              className={model === "gemini" ? "active" : ""}
-              type="button"
-              role="radio"
-              aria-checked={model === "gemini"}
-              onClick={() => setModel("gemini")}
-            >
-              <Sparkles size={18} />
-              Gemini
-            </button>
+            {MODEL_OPTIONS.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                className={model === id ? "active" : ""}
+                type="button"
+                role="radio"
+                aria-checked={model === id}
+                onClick={() => setModel(id)}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
           </div>
+          <p className="field-caption">
+            Active model: {selectedModelOption?.defaultModel || model}
+          </p>
           {mood ? <MoodReadout mood={mood} /> : null}
         </section>
+
 
         <section className="songs" aria-label="Song results">
           {!hasSearched && songs.length === 0 ? (
@@ -688,12 +730,13 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
       {open ? (
         <div className="country-menu">
           {filtered.map((country) => (
-            <button type="button" key={country.code} onMouseDown={() => selectCountry(country.name)}>
+            <button type="button" key={country.code} onPointerDown={() => selectCountry(country.name)}>
               <span><FlagIcon code={country.code} /></span>
               <strong>{country.name}</strong>
             </button>
           ))}
         </div>
+
       ) : null}
     </div>
   );

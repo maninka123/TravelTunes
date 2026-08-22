@@ -484,10 +484,17 @@ h1 {
   gap: 8px;
 }
 
-.country-chip .fi {
-  font-size: 1.1rem;
+.flag-img {
+  display: inline-block;
+  width: 20px;
+  height: 15px;
+  object-fit: cover;
   border-radius: 2px;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
+
 
 .field-caption {
   margin-top: 8px;
@@ -677,6 +684,10 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.segment button svg {
+  flex-shrink: 0;
+}
+
 .segment button:hover:not(.active) {
   background: rgba(8, 127, 140, 0.08);
 }
@@ -686,6 +697,15 @@ button:focus-visible {
   background: linear-gradient(135deg, #098896, #08717d);
   box-shadow: 0 8px 20px rgba(8, 127, 140, 0.24);
 }
+
+@media (max-width: 380px) {
+  .segment button {
+    gap: 4px;
+    padding: 0 4px;
+    font-size: 0.78rem;
+  }
+}
+
 
 
 .secondary-action,
