@@ -1,15 +1,31 @@
-const jsonHeaders = {
-  "Content-Type": "application/json",
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+function isSameOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const requestUrl = new URL(request.url);
+    return originUrl.origin === requestUrl.origin;
+  } catch {
+    return false;
+  }
+}
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: jsonHeaders });
+export async function onRequestOptions({ request }) {
+  if (!isSameOrigin(request)) {
+    return new Response(null, { status: 403 });
+  }
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
 }
 
 export async function onRequestPost({ request, env }) {
+  if (!isSameOrigin(request)) {
+    return json({ error: "Forbidden" }, 403);
+  }
   try {
     const body = await request.json();
     const provider = body.model === "qwen" ? "qwen" : "gemini";
@@ -76,7 +92,7 @@ async function callQwenVision(env, body, photos) {
     },
     body: JSON.stringify({
       model,
-      enable_thinking: true,
+      enable_thinking: false,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -147,5 +163,10 @@ function qwenErrorMessage(data, fallback) {
 }
 
 function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
+
+
