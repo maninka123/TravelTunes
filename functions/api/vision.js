@@ -1,14 +1,11 @@
-function isSameOrigin(request) {
-  const origin = request.headers.get("Origin");
-  if (!origin) return true;
-  try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    return originUrl.origin === requestUrl.origin;
-  } catch {
-    return false;
-  }
-}
+import {
+  deepSeekErrorMessage,
+  isSameOrigin,
+  json,
+  parseJsonText,
+  qwenApiKey,
+  qwenErrorMessage,
+} from "./_shared.js";
 
 export async function onRequestOptions({ request }) {
   if (!isSameOrigin(request)) {
@@ -36,24 +33,26 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (provider === "deepseek") {
-      if (!env.DEEPSEEK_API_KEY) return json({ mood: demoMood(body), demo: true });
-      return json({ mood: await callDeepSeekVision(env, body, photos), demo: false });
+      const model = env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash-vision-exp";
+      if (!env.DEEPSEEK_API_KEY) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
+      return json({ mood: await callDeepSeekVision(env, body, photos, model), resolvedModel: model, demo: false });
     }
 
     if (provider === "qwen") {
-      if (!qwenApiKey(env)) return json({ mood: demoMood(body), demo: true });
-      return json({ mood: await callQwenVision(env, body, photos), demo: false });
+      const model = env.QWEN_VISION_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+      if (!qwenApiKey(env)) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
+      return json({ mood: await callQwenVision(env, body, photos, model), resolvedModel: model, demo: false });
     }
 
-    if (!env.GEMINI_API_KEY) return json({ mood: demoMood(body), demo: true });
-    return json({ mood: await callGeminiVision(env, body, photos), demo: false });
+    const model = env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
+    if (!env.GEMINI_API_KEY) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
+    return json({ mood: await callGeminiVision(env, body, photos, model), resolvedModel: model, demo: false });
   } catch (error) {
     return json({ error: error.message || "Vision request failed." }, 500);
   }
 }
 
-async function callGeminiVision(env, body, photos) {
-  const model = env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
+async function callGeminiVision(env, body, photos, model) {
   const prompt = visionPrompt(body);
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
@@ -87,8 +86,7 @@ async function callGeminiVision(env, body, photos) {
   return parseJsonText(data.candidates?.[0]?.content?.parts?.[0]?.text) || demoMood(body);
 }
 
-async function callQwenVision(env, body, photos) {
-  const model = env.QWEN_VISION_MODEL || "qwen3.5-flash";
+async function callQwenVision(env, body, photos, model) {
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -117,12 +115,11 @@ async function callQwenVision(env, body, photos) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen vision call failed."));
+  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen vision call failed.", model));
   return parseJsonText(data.choices?.[0]?.message?.content) || demoMood(body);
 }
 
-async function callDeepSeekVision(env, body, photos) {
-  const model = env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash-vision-exp";
+async function callDeepSeekVision(env, body, photos, model) {
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -150,7 +147,7 @@ async function callDeepSeekVision(env, body, photos) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(deepSeekErrorMessage(data, "DeepSeek vision call failed."));
+  if (!response.ok) throw new Error(deepSeekErrorMessage(data, "DeepSeek vision call failed.", model));
   return parseJsonText(data.choices?.[0]?.message?.content) || demoMood(body);
 }
 
@@ -170,51 +167,4 @@ function demoMood(body) {
     palette: ["teal", "sunlit coral", "soft sky"],
     notes: "Demo mood used until the selected provider key is configured.",
   };
-}
-
-function parseJsonText(text) {
-  if (!text) return null;
-  if (typeof text === "object") return text;
-  const cleaned = String(text).replace(/^```json\s*|\s*```$/g, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : null;
-  }
-}
-
-function qwenApiKey(env) {
-  return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
-}
-
-function qwenErrorMessage(data, fallback) {
-  const message = data.error?.message || data.message || fallback;
-  const code = data.error?.code || data.code || "";
-  if (/invalid_api_key|api key|apikey/i.test(`${code} ${message}`)) {
-    return "Qwen/DashScope rejected the configured API key. Check QWEN_API_KEY or DASHSCOPE_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
-  }
-  if (/AccessDenied|Unpurchased|eligible|model denied/i.test(`${code} ${message}`)) {
-    return "Qwen/DashScope accepted the key but denied access to the selected model. Enable access for the configured Qwen model in Alibaba Model Studio, or set QWEN_VISION_MODEL to a vision model your account can use.";
-  }
-  return message;
-}
-
-function deepSeekErrorMessage(data, fallback) {
-  const message = data.error?.message || data.message || fallback;
-  const code = data.error?.code || data.code || "";
-  if (/invalid_api_key|api key|apikey|authentication_error|unauthorized/i.test(`${code} ${message}`)) {
-    return "DeepSeek rejected the configured API key. Check DEEPSEEK_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
-  }
-  if (/model_not_found|not found|unknown model|denied|permission/i.test(`${code} ${message}`)) {
-    return `DeepSeek could not access the requested vision model (${data.model || "deepseek-v4-flash-vision-exp"}). The model may have changed or expired; set DEEPSEEK_VISION_MODEL in .dev.vars.`;
-  }
-  return message;
-}
-
-function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

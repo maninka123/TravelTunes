@@ -1,14 +1,11 @@
-function isSameOrigin(request) {
-  const origin = request.headers.get("Origin");
-  if (!origin) return true;
-  try {
-    const originUrl = new URL(origin);
-    const requestUrl = new URL(request.url);
-    return originUrl.origin === requestUrl.origin;
-  } catch {
-    return false;
-  }
-}
+import {
+  deepSeekErrorMessage,
+  isSameOrigin,
+  json,
+  parseJsonText,
+  qwenApiKey,
+  qwenErrorMessage,
+} from "./_shared.js";
 
 export async function onRequestOptions({ request }) {
   if (!isSameOrigin(request)) {
@@ -31,24 +28,26 @@ export async function onRequestPost({ request, env }) {
     const provider = body.model === "deepseek" ? "deepseek" : body.model === "qwen" ? "qwen" : "gemini";
 
     if (provider === "deepseek") {
-      if (!env.DEEPSEEK_API_KEY) return json({ songs: demoSongs(body), demo: true });
-      return json({ songs: normalizeSongs(await callDeepSeekSongs(env, body)), demo: false });
+      const model = env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-flash";
+      if (!env.DEEPSEEK_API_KEY) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
+      return json({ songs: normalizeSongs(await callDeepSeekSongs(env, body, model)), resolvedModel: model, demo: false });
     }
 
     if (provider === "qwen") {
-      if (!qwenApiKey(env)) return json({ songs: demoSongs(body), demo: true });
-      return json({ songs: normalizeSongs(await callQwenSongs(env, body)), demo: false });
+      const model = env.QWEN_TEXT_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+      if (!qwenApiKey(env)) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
+      return json({ songs: normalizeSongs(await callQwenSongs(env, body, model)), resolvedModel: model, demo: false });
     }
 
-    if (!env.GEMINI_API_KEY) return json({ songs: demoSongs(body), demo: true });
-    return json({ songs: normalizeSongs(await callGeminiSongs(env, body)), demo: false });
+    const model = env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
+    if (!env.GEMINI_API_KEY) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
+    return json({ songs: normalizeSongs(await callGeminiSongs(env, body, model)), resolvedModel: model, demo: false });
   } catch (error) {
     return json({ error: error.message || "Song request failed." }, 500);
   }
 }
 
-async function callGeminiSongs(env, body) {
-  const model = env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
+async function callGeminiSongs(env, body, model) {
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
     {
@@ -68,8 +67,7 @@ async function callGeminiSongs(env, body) {
   return parseJsonText(data.candidates?.[0]?.content?.parts?.[0]?.text)?.songs;
 }
 
-async function callQwenSongs(env, body) {
-  const model = env.QWEN_TEXT_MODEL || "qwen3.5-flash";
+async function callQwenSongs(env, body, model) {
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -85,16 +83,15 @@ async function callQwenSongs(env, body) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen song call failed."));
+  if (!response.ok) throw new Error(qwenErrorMessage(data, "Qwen song call failed.", model));
   return parseJsonText(data.choices?.[0]?.message?.content)?.songs;
 }
 
-async function callDeepSeekSongs(env, body) {
+async function callDeepSeekSongs(env, body, model) {
   // The song call is text only — it receives the mood JSON from the vision call,
   // never the images. Do not fallback to DEEPSEEK_VISION_MODEL because the vision model
   // carries an "-exp" suffix and may be withdrawn without notice. Keeping the song call
   // on the stable model ensures a withdrawal breaks the mood read only.
-  const model = env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-flash";
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -109,7 +106,7 @@ async function callDeepSeekSongs(env, body) {
   });
 
   const data = await response.json();
-  if (!response.ok) throw new Error(deepSeekErrorMessage(data, "DeepSeek song call failed."));
+  if (!response.ok) throw new Error(deepSeekErrorMessage(data, "DeepSeek song call failed.", model));
   return parseJsonText(data.choices?.[0]?.message?.content)?.songs;
 }
 
@@ -193,51 +190,4 @@ function demoSongs(body) {
       reason: "Use as a local search seed when a provider key is missing.",
     },
   ];
-}
-
-function parseJsonText(text) {
-  if (!text) return null;
-  if (typeof text === "object") return text;
-  const cleaned = String(text).replace(/^```json\s*|\s*```$/g, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    return match ? JSON.parse(match[0]) : null;
-  }
-}
-
-function qwenApiKey(env) {
-  return env.QWEN_API_KEY || env.DASHSCOPE_API_KEY;
-}
-
-function qwenErrorMessage(data, fallback) {
-  const message = data.error?.message || data.message || fallback;
-  const code = data.error?.code || data.code || "";
-  if (/invalid_api_key|api key|apikey/i.test(`${code} ${message}`)) {
-    return "Qwen/DashScope rejected the configured API key. Check QWEN_API_KEY or DASHSCOPE_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
-  }
-  if (/AccessDenied|Unpurchased|eligible|model denied/i.test(`${code} ${message}`)) {
-    return `Qwen/DashScope accepted the key but denied access to the selected model. Enable access for ${data.model || "qwen3.5-flash"} in Alibaba Model Studio, or set QWEN_TEXT_MODEL to a model your account can use.`;
-  }
-  return message;
-}
-
-function deepSeekErrorMessage(data, fallback) {
-  const message = data.error?.message || data.message || fallback;
-  const code = data.error?.code || data.code || "";
-  if (/invalid_api_key|api key|apikey|authentication_error|unauthorized/i.test(`${code} ${message}`)) {
-    return "DeepSeek rejected the configured API key. Check DEEPSEEK_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
-  }
-  if (/model_not_found|not found|unknown model|denied|permission/i.test(`${code} ${message}`)) {
-    return `DeepSeek could not access the requested model (${data.model || "deepseek-v4-flash"}). The model may have changed or expired; set DEEPSEEK_TEXT_MODEL in .dev.vars.`;
-  }
-  return message;
-}
-
-function json(payload, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
 }

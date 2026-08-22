@@ -47,19 +47,16 @@ const MODEL_OPTIONS = [
   {
     id: "gemini",
     label: "Gemini",
-    defaultModel: "gemini-3.1-flash-lite",
     Icon: SiGooglegemini,
   },
   {
     id: "qwen",
     label: "Qwen",
-    defaultModel: "qwen3.5-flash",
     Icon: SiQwen,
   },
   {
     id: "deepseek",
     label: "DeepSeek",
-    defaultModel: "deepseek-v4-flash-vision-exp",
     Icon: SiDeepseek,
   },
 ];
@@ -136,6 +133,7 @@ function App() {
   const [detectedEnergy, setDetectedEnergy] = useState(null);
   const [style, setStyle] = useState(50);
   const [model, setModel] = useState("gemini");
+  const [resolvedModels, setResolvedModels] = useState({ vision: "", songs: "" });
   const [imageNotes, setImageNotes] = useState("");
   const [mood, setMood] = useState(null);
   const [songs, setSongs] = useState([]);
@@ -237,6 +235,7 @@ function App() {
     setDetectedEnergy(null);
     setStyle(50);
     setModel("gemini");
+    setResolvedModels({ vision: "", songs: "" });
     setImageNotes("");
     setMood(null);
     setSongs([]);
@@ -276,6 +275,7 @@ function App() {
     setBusy("songs");
     try {
       let currentMood = mood;
+      let resolvedVision = "";
       setStatus(`Reading photo mood with ${modelLabel}...`);
       try {
         const imagePayloads = await Promise.all(photos.map((photo) => readFileAsVisionPayload(photo.file)));
@@ -289,6 +289,7 @@ function App() {
         });
         currentMood = visionData.mood;
         setMood(visionData.mood);
+        resolvedVision = visionData.resolvedModel || "";
         if (visionData.mood?.energy != null && Number.isFinite(Number(visionData.mood.energy))) {
           setDetectedEnergy(Math.round(Number(visionData.mood.energy)));
         }
@@ -306,6 +307,9 @@ function App() {
         imageNotes,
         mood: currentMood,
       });
+
+      const resolvedSongs = songData.resolvedModel || "";
+      setResolvedModels({ vision: resolvedVision, songs: resolvedSongs });
 
       const rawSongs = songData.songs || [];
       const songsWithIds = rawSongs.map((song, index) => ({
@@ -497,9 +501,11 @@ function App() {
               </button>
             ))}
           </div>
-          <p className="field-caption">
-            Active model: {selectedModelOption?.defaultModel || model}
-          </p>
+          {resolvedModels.vision && resolvedModels.songs ? (
+            <p className="field-caption">
+              Vision: {resolvedModels.vision} · Songs: {resolvedModels.songs}
+            </p>
+          ) : null}
           {mood ? <MoodReadout mood={mood} /> : null}
         </section>
 
@@ -675,7 +681,16 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
   }
 
   return (
-    <div className={`country-picker ${compact ? "compact" : ""}`.trim()}>
+    <div
+      className={`country-picker ${compact ? "compact" : ""}`.trim()}
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        setOpen(false);
+        if (!compact && !COUNTRY_OPTIONS.some((country) => country.name === query)) {
+          setQuery(value || "");
+        }
+      }}
+    >
       <div className="country-input-shell">
         <span className="country-flag">
           <FlagIcon code={compact ? "" : selectedCode} />
@@ -687,14 +702,6 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          onBlur={() =>
-            window.setTimeout(() => {
-              setOpen(false);
-              if (!compact && !COUNTRY_OPTIONS.some((country) => country.name === query)) {
-                setQuery(value || "");
-              }
-            }, 140)
-          }
           onKeyDown={(event) => {
             if (event.key !== "Enter" || !filtered[0]) return;
             event.preventDefault();
@@ -708,7 +715,11 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
       {open ? (
         <div className="country-menu">
           {filtered.map((country) => (
-            <button type="button" key={country.code} onPointerDown={() => selectCountry(country.name)}>
+            <button
+              type="button"
+              key={country.code}
+              onClick={() => selectCountry(country.name)}
+            >
               <span><FlagIcon code={country.code} /></span>
               <strong>{country.name}</strong>
             </button>
