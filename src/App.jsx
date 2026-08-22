@@ -30,9 +30,21 @@ import { postJson, readFileAsVisionPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
 export function FlagIcon({ code, className = "" }) {
-  if (!code) return <span className={`country-flag-placeholder ${className}`.trim()}>🌍</span>;
-  return <span className={`fi fi-${String(code).toLowerCase()} ${className}`.trim()} aria-hidden="true" />;
+  if (!code) return null;
+  return (
+    <img
+      src={`https://flagcdn.com/w40/${String(code).toLowerCase()}.png`}
+      srcSet={`https://flagcdn.com/w80/${String(code).toLowerCase()}.png 2x`}
+      alt=""
+      aria-hidden="true"
+      width={20}
+      height={15}
+      loading="lazy"
+      className={`flag-img ${className}`.trim()}
+    />
+  );
 }
+
 
 const MAX_PHOTOS = 4;
 const RECENT_LANG_KEY = "traveltunes_recent_languages";

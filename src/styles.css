@@ -484,10 +484,17 @@ h1 {
   gap: 8px;
 }
 
-.country-chip .fi {
-  font-size: 1.1rem;
+.flag-img {
+  display: inline-block;
+  width: 20px;
+  height: 15px;
+  object-fit: cover;
   border-radius: 2px;
+  vertical-align: middle;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
+
 
 .field-caption {
   margin-top: 8px;
