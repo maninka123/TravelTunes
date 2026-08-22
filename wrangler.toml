@@ -2,9 +2,12 @@ name = "traveltunes"
 compatibility_date = "2026-06-28"
 pages_build_output_dir = "dist"
 
-# Run `npx wrangler kv namespace create YT_CACHE` and paste the returned id below
-[[kv_namespaces]]
-binding = "YT_CACHE"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+# Optional: To enable persistent KV caching across serverless instances:
+# 1. Run `npx wrangler kv namespace create YT_CACHE`
+# 2. Uncomment the block below and replace the id with your generated 32-character hex ID:
+# [[kv_namespaces]]
+# binding = "YT_CACHE"
+# id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
 
 
