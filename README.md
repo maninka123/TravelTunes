@@ -21,7 +21,7 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 - Upload up to 4 travel photos with a dynamic preview layout.
 - Detect the photo country from EXIF GPS when available to guide mood analysis.
-- Choose which countries the music should come from with multi-country selection and vector flag icons.
+- Choose which countries the music should come from with multi-country selection and country flags.
 - Refine preferred languages with auto-derived defaults, custom additions, and quick-pick recent languages.
 - Tune the vibe with discrete Energy (Calm / Easy / Lively / High) and Style (Traditional / Mixed / Modern) segmented controls.
 - Choose Gemini, Qwen, or DeepSeek for photo mood reading and song generation.
@@ -33,12 +33,13 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 - React 18 + Vite
 - Cloudflare Pages + Pages Functions
-- `flag-icons` for vector country flags across all platforms
+- FlagCDN for lightweight on-demand country flag images
 - `@icons-pack/react-simple-icons` for verified AI provider brand marks
 - `exifr` for client-side GPS metadata
 - OpenStreetMap Nominatim reverse geocoding proxied via `/api/geocode`
 - Gemini, Qwen/DashScope, and DeepSeek model routes
 - YouTube Data API search with Cloudflare KV caching (`YT_CACHE`)
+
 
 ## 🚀 Local Development
 
