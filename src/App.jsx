@@ -153,10 +153,7 @@ function App() {
 
   function handleSongUpdate(songKey, updates) {
     setSongs((current) =>
-      current.map((song, index) => {
-        const key = `${song.title}-${song.artist}-${index}`;
-        return key === songKey ? { ...song, ...updates } : song;
-      }),
+      current.map((song) => (song.id === songKey ? { ...song, ...updates } : song)),
     );
   }
 
@@ -197,7 +194,12 @@ function App() {
         mood: currentMood,
       });
 
-      setSongs(songData.songs || []);
+      const rawSongs = songData.songs || [];
+      const songsWithIds = rawSongs.map((song, index) => ({
+        ...song,
+        id: crypto.randomUUID?.() ?? `${Date.now()}-${index}`,
+      }));
+      setSongs(songsWithIds);
       setHasSearched(true);
       setStatus(songData.demo ? "Demo song list shown because a model key is missing." : "Song list ready.");
     } catch (error) {
@@ -206,6 +208,7 @@ function App() {
       setBusy("");
     }
   }
+
 
   // Summary line directly above Find songs button
   const summaryLine = useMemo(() => {
@@ -378,40 +381,35 @@ function App() {
               {tierOneSongs.length > 0 ? (
                 <div className="song-group">
                   <h2 className="song-group-heading">From {country}</h2>
-                  {tierOneSongs.map((song, index) => {
-                    const songKey = `${song.title}-${song.artist}-t1-${index}`;
-                    return (
-                      <SongRow
-                        song={song}
-                        songKey={songKey}
-                        key={songKey}
-                        activeSongKey={activeSongKey}
-                        onActiveSongChange={setActiveSongKey}
-                        onSongUpdate={handleSongUpdate}
-                      />
-                    );
-                  })}
+                  {tierOneSongs.map((song) => (
+                    <SongRow
+                      song={song}
+                      songKey={song.id}
+                      key={song.id}
+                      activeSongKey={activeSongKey}
+                      onActiveSongChange={setActiveSongKey}
+                      onSongUpdate={handleSongUpdate}
+                    />
+                  ))}
                 </div>
               ) : null}
 
               {tierTwoSongs.length > 0 ? (
                 <div className="song-group">
                   <h2 className="song-group-heading">Wider picks</h2>
-                  {tierTwoSongs.map((song, index) => {
-                    const songKey = `${song.title}-${song.artist}-t2-${index}`;
-                    return (
-                      <SongRow
-                        song={song}
-                        songKey={songKey}
-                        key={songKey}
-                        activeSongKey={activeSongKey}
-                        onActiveSongChange={setActiveSongKey}
-                        onSongUpdate={handleSongUpdate}
-                      />
-                    );
-                  })}
+                  {tierTwoSongs.map((song) => (
+                    <SongRow
+                      song={song}
+                      songKey={song.id}
+                      key={song.id}
+                      activeSongKey={activeSongKey}
+                      onActiveSongChange={setActiveSongKey}
+                      onSongUpdate={handleSongUpdate}
+                    />
+                  ))}
                 </div>
               ) : null}
+
             </div>
           )}
         </section>

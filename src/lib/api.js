@@ -39,8 +39,9 @@ export async function readFileAsVisionPayload(file) {
 }
 
 async function resizeImageToBlob(file) {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
   const longestEdge = Math.max(bitmap.width, bitmap.height);
+
   const scale = longestEdge > VISION_MAX_EDGE ? VISION_MAX_EDGE / longestEdge : 1;
 
   const width = Math.max(1, Math.round(bitmap.width * scale));
