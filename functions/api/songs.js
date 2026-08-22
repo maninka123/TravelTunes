@@ -48,7 +48,7 @@ export async function onRequestPost({ request, env }) {
 }
 
 async function callGeminiSongs(env, body) {
-  const model = env.GEMINI_TEXT_MODEL || env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
+  const model = env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`,
     {
@@ -69,7 +69,7 @@ async function callGeminiSongs(env, body) {
 }
 
 async function callQwenSongs(env, body) {
-  const model = env.QWEN_TEXT_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+  const model = env.QWEN_TEXT_MODEL || "qwen3.5-flash";
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -90,7 +90,11 @@ async function callQwenSongs(env, body) {
 }
 
 async function callDeepSeekSongs(env, body) {
-  const model = env.DEEPSEEK_TEXT_MODEL || env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash";
+  // The song call is text only — it receives the mood JSON from the vision call,
+  // never the images. Do not fallback to DEEPSEEK_VISION_MODEL because the vision model
+  // carries an "-exp" suffix and may be withdrawn without notice. Keeping the song call
+  // on the stable model ensures a withdrawal breaks the mood read only.
+  const model = env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-flash";
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -231,7 +235,7 @@ function deepSeekErrorMessage(data, fallback) {
     return "DeepSeek rejected the configured API key. Check DEEPSEEK_API_KEY in .dev.vars and Cloudflare Pages environment variables.";
   }
   if (/model_not_found|not found|unknown model|denied|permission/i.test(`${code} ${message}`)) {
-    return `DeepSeek could not access the requested model (${data.model || "deepseek-v4-flash"}). The model may have changed or expired; set DEEPSEEK_TEXT_MODEL or DEEPSEEK_VISION_MODEL in .dev.vars.`;
+    return `DeepSeek could not access the requested model (${data.model || "deepseek-v4-flash"}). The model may have changed or expired; set DEEPSEEK_TEXT_MODEL in .dev.vars.`;
   }
   return message;
 }

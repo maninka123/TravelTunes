@@ -88,7 +88,7 @@ async function callGeminiVision(env, body, photos) {
 }
 
 async function callQwenVision(env, body, photos) {
-  const model = env.QWEN_VISION_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+  const model = env.QWEN_VISION_MODEL || "qwen3.5-flash";
   const response = await fetch("https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions", {
     method: "POST",
     headers: {
