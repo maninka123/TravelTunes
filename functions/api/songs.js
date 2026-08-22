@@ -115,22 +115,21 @@ async function callDeepSeekSongs(env, body) {
 
 function songPrompt(body) {
   const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
-  const countryNames = rawCountries
-    .map((c) => (typeof c === "string" ? c : c?.name))
-    .filter(Boolean);
-  const languagesList = Array.isArray(body.languages) && body.languages.length > 0
-    ? body.languages
-    : ["English", "local music"];
-  const languagesStr = languagesList.join(", ");
+  const validCountries = rawCountries.filter((c) => c && c.name && Number(c.count) > 0);
+  const total = 8;
   const photoCountry = body.country || "unknown";
   const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
 
-  const originInstruction = countryNames.length > 0
-    ? `Choose songs that originate from: ${countryNames.join(", ")}. Preferred languages: ${languagesStr}. The photos were taken in ${photoCountry}; match the scene mood but do not let the photo location drive the song origin.`
-    : `Choose well-known international songs. Preferred languages: ${languagesStr}.`;
+  let originInstruction;
+  if (validCountries.length > 0) {
+    const pairs = validCountries.map((c) => `${c.name}: ${c.count}`).join(", ");
+    originInstruction = `Choose ${total} real songs with this split by country of origin: ${pairs}. The photos were taken in ${photoCountry}; match the scene mood but do not let the photo location change the split. Where a country has several major music languages, choose whichever best fits the mood.`;
+  } else {
+    originInstruction = `Choose ${total} well-known international songs.`;
+  }
 
   return `Return JSON only with {"songs":[...]}.
-Suggest 8 real songs for travel photos.
+Suggest ${total} real songs for travel photos.
 ${originInstruction}
 Energy: ${body.energy} (15 Calm, 40 Easy, 65 Lively, 90 High)
 Style: ${body.style} (20 Traditional, 50 Mixed, 80 Modern)
@@ -155,11 +154,7 @@ function normalizeSongs(songs) {
 
 function demoSongs(body) {
   const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
-  const countryNames = rawCountries
-    .map((c) => (typeof c === "string" ? c : c?.name))
-    .filter(Boolean);
-  const primaryCountry = countryNames[0] || body.country || "Sri Lanka";
-  const local = Array.isArray(body.languages) && body.languages[0] ? body.languages[0] : "Local";
+  const primaryCountry = rawCountries[0]?.name || body.country || "Sri Lanka";
   return [
     {
       title: "Manike Mage Hithe",
@@ -194,7 +189,7 @@ function demoSongs(body) {
     {
       title: `${primaryCountry} travel music`,
       artist: "Local artists",
-      language: local,
+      language: "Local",
       reason: "Use as a local search seed when a provider key is missing.",
     },
   ];

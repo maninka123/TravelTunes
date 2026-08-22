@@ -3,8 +3,6 @@ import {
   BrainCircuit,
   Camera,
   Check,
-  ChevronDown,
-  ChevronUp,
   Copy,
   Globe2,
   ImagePlus,
@@ -21,11 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  codeForCountry,
-  COUNTRY_OPTIONS,
-  defaultLanguagesFor,
-} from "./data/countries";
+import { codeForCountry, COUNTRY_OPTIONS } from "./data/countries";
 import { postJson, readFileAsVisionPayload } from "./lib/api";
 import { getGpsFromPhoto, reverseGeocodeCountry } from "./lib/location";
 
@@ -45,9 +39,9 @@ export function FlagIcon({ code, className = "" }) {
   );
 }
 
-
 const MAX_PHOTOS = 4;
-const RECENT_LANG_KEY = "traveltunes_recent_languages";
+const TOTAL_SONGS = 8;
+const MAX_COUNTRIES = 4;
 
 const MODEL_OPTIONS = [
   {
@@ -77,20 +71,58 @@ const ENERGY_OPTIONS = [
   { label: "High", value: 90 },
 ];
 
-
 const STYLE_OPTIONS = [
   { label: "Traditional", value: 20 },
   { label: "Mixed", value: 50 },
   { label: "Modern", value: 80 },
 ];
 
-function getStoredRecentLanguages() {
-  try {
-    const raw = localStorage.getItem(RECENT_LANG_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
+function distributeEvenly(items) {
+  const n = items.length;
+  if (n === 0) return [];
+  const base = Math.floor(TOTAL_SONGS / n);
+  const remainder = TOTAL_SONGS % n;
+  return items.map((item, idx) => ({
+    ...item,
+    count: base + (idx < remainder ? 1 : 0),
+  }));
+}
+
+function incrementCountryCount(list, targetIdx) {
+  let maxCount = 1;
+  let donorIdx = -1;
+  for (let i = 0; i < list.length; i += 1) {
+    if (i === targetIdx) continue;
+    if (list[i].count > 1 && list[i].count >= maxCount) {
+      maxCount = list[i].count;
+      donorIdx = i;
+    }
   }
+  if (donorIdx === -1) return list;
+  return list.map((item, i) => {
+    if (i === targetIdx) return { ...item, count: item.count + 1 };
+    if (i === donorIdx) return { ...item, count: item.count - 1 };
+    return item;
+  });
+}
+
+function decrementCountryCount(list, targetIdx) {
+  if (list[targetIdx].count <= 1) return list;
+  let maxCount = -1;
+  let recipientIdx = -1;
+  for (let i = 0; i < list.length; i += 1) {
+    if (i === targetIdx) continue;
+    if (list[i].count >= maxCount) {
+      maxCount = list[i].count;
+      recipientIdx = i;
+    }
+  }
+  if (recipientIdx === -1) return list;
+  return list.map((item, i) => {
+    if (i === targetIdx) return { ...item, count: item.count - 1 };
+    if (i === recipientIdx) return { ...item, count: item.count + 1 };
+    return item;
+  });
 }
 
 function App() {
@@ -98,13 +130,8 @@ function App() {
   const [country, setCountry] = useState("Sri Lanka");
   const [detectedCountry, setDetectedCountry] = useState("");
   const [musicCountries, setMusicCountries] = useState(() => [
-    { name: "Sri Lanka", code: codeForCountry("Sri Lanka") || "LK" },
+    { name: "Sri Lanka", code: codeForCountry("Sri Lanka") || "LK", count: 8 },
   ]);
-  const [customLanguages, setCustomLanguages] = useState([]);
-  const [languages, setLanguages] = useState(() => defaultLanguagesFor("Sri Lanka"));
-  const [recentLanguages, setRecentLanguages] = useState(getStoredRecentLanguages);
-  const [languagesExpanded, setLanguagesExpanded] = useState(false);
-  const [customLanguage, setCustomLanguage] = useState("");
   const [energy, setEnergy] = useState(40);
   const [detectedEnergy, setDetectedEnergy] = useState(null);
   const [style, setStyle] = useState(50);
@@ -121,9 +148,17 @@ function App() {
   const selectedModelOption = MODEL_OPTIONS.find((m) => m.id === model) || MODEL_OPTIONS[0];
   const modelLabel = selectedModelOption.label;
 
-
   const photosRef = useRef(photos);
   photosRef.current = photos;
+
+  // Clear obsolete languages key on initial load
+  useEffect(() => {
+    try {
+      localStorage.removeItem("traveltunes_recent_languages");
+    } catch {
+      // Ignore
+    }
+  }, []);
 
   // Unmount-only cleanup so adding photos doesn't revoke existing previews
   useEffect(() => {
@@ -131,6 +166,14 @@ function App() {
       photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.previewUrl));
     };
   }, []);
+
+  function handlePhotoCountryChange(newCountry) {
+    setCountry(newCountry);
+    const code = codeForCountry(newCountry);
+    if (newCountry && code) {
+      addMusicCountry({ name: newCountry, code });
+    }
+  }
 
   async function handlePhotos(event) {
     const selected = Array.from(event.target.files || []);
@@ -149,26 +192,15 @@ function App() {
 
     const detected = await detectCountry(nextPhotos);
     if (detected) {
-      const prevDetected = detectedCountry;
       setDetectedCountry(detected);
       setCountry(detected);
       const detectedCode = codeForCountry(detected);
-      const newCountryObj = { name: detected, code: detectedCode };
-
-      const shouldSeed =
-        musicCountries.length === 0 ||
-        (musicCountries.length === 1 &&
-          musicCountries[0].name === (prevDetected || "Sri Lanka"));
-
-      if (shouldSeed) {
-        setMusicCountries([newCountryObj]);
-        const newDefaults = defaultLanguagesFor(detected);
-        setLanguages(Array.from(new Set([...newDefaults, ...customLanguages])));
+      if (detectedCode) {
+        addMusicCountry({ name: detected, code: detectedCode });
       }
     } else {
       setDetectedCountry("");
     }
-
 
     event.target.value = "";
   }
@@ -200,9 +232,7 @@ function App() {
     setPhotos([]);
     setCountry("Sri Lanka");
     setDetectedCountry("");
-    setMusicCountries([{ name: "Sri Lanka", code: codeForCountry("Sri Lanka") || "LK" }]);
-    setCustomLanguages([]);
-    setLanguages(defaultLanguagesFor("Sri Lanka"));
+    setMusicCountries([{ name: "Sri Lanka", code: codeForCountry("Sri Lanka") || "LK", count: 8 }]);
     setEnergy(40);
     setDetectedEnergy(null);
     setStyle(50);
@@ -217,43 +247,22 @@ function App() {
   }
 
   function addMusicCountry(countryObj) {
-    if (!countryObj?.name || musicCountries.some((c) => c.name === countryObj.name)) return;
-    const next = [...musicCountries, countryObj];
-    setMusicCountries(next);
-    const newDefaults = defaultLanguagesFor(countryObj.name);
-    setLanguages((prev) => Array.from(new Set([...prev, ...newDefaults])));
+    if (!countryObj?.name || musicCountries.length >= MAX_COUNTRIES || musicCountries.some((c) => c.name === countryObj.name)) return;
+    const next = [...musicCountries, { name: countryObj.name, code: countryObj.code }];
+    setMusicCountries(distributeEvenly(next));
   }
 
   function removeMusicCountry(countryName) {
     const next = musicCountries.filter((c) => c.name !== countryName);
-    setMusicCountries(next);
-    const remainingDefaults = next.flatMap((c) => defaultLanguagesFor(c.name));
-    setLanguages(Array.from(new Set([...remainingDefaults, ...customLanguages])));
+    setMusicCountries(distributeEvenly(next));
   }
 
-  function addLanguage(langToAdd) {
-    const value = (typeof langToAdd === "string" ? langToAdd : customLanguage).trim();
-    if (!value) return;
-
-    setCustomLanguages((prev) => Array.from(new Set([...prev, value])));
-    setLanguages((prev) => Array.from(new Set([...prev, value])));
-    setCustomLanguage("");
-
-    try {
-      const existing = getStoredRecentLanguages().filter(
-        (l) => l.toLowerCase() !== value.toLowerCase(),
-      );
-      const updated = [value, ...existing].slice(0, 4);
-      localStorage.setItem(RECENT_LANG_KEY, JSON.stringify(updated));
-      setRecentLanguages(updated);
-    } catch {
-      // LocalStorage access non-fatal
-    }
+  function handleIncrement(targetIdx) {
+    setMusicCountries((prev) => incrementCountryCount(prev, targetIdx));
   }
 
-  function removeLanguage(language) {
-    setCustomLanguages((prev) => prev.filter((item) => item !== language));
-    setLanguages((prev) => prev.filter((item) => item !== language));
+  function handleDecrement(targetIdx) {
+    setMusicCountries((prev) => decrementCountryCount(prev, targetIdx));
   }
 
   function handleSongUpdate(songKey, updates) {
@@ -291,10 +300,9 @@ function App() {
       const songData = await postJson("/api/songs", {
         model,
         country,
-        musicCountries: musicCountries.map((c) => c.name),
+        musicCountries: musicCountries.map((c) => ({ name: c.name, count: c.count })),
         energy,
         style,
-        languages,
         imageNotes,
         mood: currentMood,
       });
@@ -316,30 +324,15 @@ function App() {
 
   // Summary line directly above Find songs button
   const summaryLine = useMemo(() => {
-    let countryStr = "";
-    if (musicCountries.length === 1) {
-      countryStr = `from ${musicCountries[0].name}`;
-    } else if (musicCountries.length === 2) {
-      countryStr = `from ${musicCountries[0].name} and ${musicCountries[1].name}`;
-    } else if (musicCountries.length > 2) {
-      countryStr = `from ${musicCountries.slice(0, -1).map((c) => c.name).join(", ")} and ${musicCountries[musicCountries.length - 1].name}`;
-    }
-
-    let langStr = "";
-    if (languages.length === 1) {
-      langStr = `in ${languages[0]}`;
-    } else if (languages.length === 2) {
-      langStr = `in ${languages[0]} or ${languages[1]}`;
-    } else if (languages.length > 2) {
-      langStr = `in ${languages[0]} or ${languages[1]} and others`;
-    }
-
     if (musicCountries.length === 0) {
-      return langStr ? `8 well-known international songs, ${langStr}.` : "8 well-known international songs.";
+      return "8 well-known international songs.";
     }
-
-    return langStr ? `8 songs ${countryStr}, ${langStr}.` : `8 songs ${countryStr}.`;
-  }, [musicCountries, languages]);
+    if (musicCountries.length === 1) {
+      return `8 songs from ${musicCountries[0].name}.`;
+    }
+    const parts = musicCountries.map((c) => `${c.count} from ${c.name}`);
+    return `${parts.join(", ")}.`;
+  }, [musicCountries]);
 
   return (
     <main className="app-shell">
@@ -376,8 +369,8 @@ function App() {
             label="Country"
             meta={detectedCountry ? "Detected" : "Select"}
           />
-          <CountryPicker value={country} onChange={setCountry} />
-          <p className="field-caption">Used to read the photo mood.</p>
+          <CountryPicker value={country} onChange={handlePhotoCountryChange} />
+          <p className="field-caption">Used to read the photo mood and automatically adds to Music from.</p>
         </section>
 
         <section className="surface notes-surface">
@@ -410,95 +403,81 @@ function App() {
         </section>
 
         <section className="surface">
-          <SectionHeading icon={<Globe2 size={18} />} label="Music from" />
+          <SectionHeading
+            icon={<Globe2 size={18} />}
+            label="Music from"
+            meta={musicCountries.length > 0 ? `${musicCountries.length}/${MAX_COUNTRIES}` : null}
+          />
           {musicCountries.length === 0 ? (
             <p className="helper-text">No countries selected. Songs will be well-known international picks.</p>
           ) : (
-            <div className="chip-row">
-              {musicCountries.map((c) => (
-                <button
-                  className="chip selected country-chip"
-                  type="button"
-                  key={c.name}
-                  onClick={() => removeMusicCountry(c.name)}
-                  aria-label={`Remove ${c.name}`}
-                >
-                  <FlagIcon code={c.code} />
-                  <span>{c.name}</span>
-                  <X size={14} />
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="chip-row country-chips-row">
+                {musicCountries.map((c, idx) => {
+                  const canIncrement = musicCountries.some((other, oIdx) => oIdx !== idx && other.count > 1);
+                  const canDecrement = c.count > 1;
+                  const showCounts = musicCountries.length > 1;
+
+                  return (
+                    <div className="chip country-chip" key={c.name}>
+                      <FlagIcon code={c.code} />
+                      <span className="country-name">{c.name}</span>
+                      {showCounts ? (
+                        <div className="country-count-stepper">
+                          <span className="country-count">{c.count}</span>
+                          <button
+                            type="button"
+                            className="count-btn"
+                            onClick={() => handleDecrement(idx)}
+                            disabled={!canDecrement}
+                            aria-label={`Decrease songs from ${c.name}`}
+                          >
+                            −
+                          </button>
+                          <button
+                            type="button"
+                            className="count-btn"
+                            onClick={() => handleIncrement(idx)}
+                            disabled={!canIncrement}
+                            aria-label={`Increase songs from ${c.name}`}
+                          >
+                            +
+                          </button>
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="chip-remove"
+                        onClick={() => removeMusicCountry(c.name)}
+                        aria-label={`Remove ${c.name}`}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {musicCountries.length > 1 ? (
+                <p className="allocation-status">8 of 8 allocated</p>
+              ) : null}
+            </>
           )}
 
-          <div className="add-country-row">
-            <CountryPicker
-              compact
-              placeholder="+ Add country"
-              value=""
-              onChange={(name) => {
-                const opt = COUNTRY_OPTIONS.find((co) => co.name === name);
-                if (opt) addMusicCountry({ name: opt.name, code: opt.code });
-              }}
-            />
-          </div>
-
-          <button
-            type="button"
-            className="languages-toggle"
-            onClick={() => setLanguagesExpanded(!languagesExpanded)}
-            aria-expanded={languagesExpanded}
-          >
-            <span>Languages: {languages.length > 0 ? languages.join(", ") : "None"}</span>
-            {languagesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-
-          {languagesExpanded ? (
-            <div className="languages-editor">
-              <div className="chip-row">
-                {languages.map((language) => (
-                  <button
-                    className="chip selected"
-                    type="button"
-                    key={language}
-                    onClick={() => removeLanguage(language)}
-                    aria-label={`Remove ${language}`}
-                  >
-                    {language}
-                    <X size={14} />
-                  </button>
-                ))}
-              </div>
-              <div className="inline-form">
-                <input
-                  value={customLanguage}
-                  onChange={(event) => setCustomLanguage(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") addLanguage();
-                  }}
-                  placeholder="Add a language"
-                />
-                <button type="button" onClick={() => addLanguage()}>Add</button>
-              </div>
-              {recentLanguages.filter((l) => !languages.includes(l)).length > 0 ? (
-                <div className="recent-languages-row">
-                  <span className="recent-label">Recent:</span>
-                  {recentLanguages
-                    .filter((l) => !languages.includes(l))
-                    .map((l) => (
-                      <button
-                        key={l}
-                        type="button"
-                        className="chip-ghost"
-                        onClick={() => addLanguage(l)}
-                      >
-                        + {l}
-                      </button>
-                    ))}
-                </div>
-              ) : null}
+          {musicCountries.length < MAX_COUNTRIES ? (
+            <div className="add-country-row">
+              <CountryPicker
+                compact
+                placeholder="+ Add country"
+                value=""
+                onChange={(name) => {
+                  const opt = COUNTRY_OPTIONS.find((co) => co.name === name);
+                  if (opt) addMusicCountry({ name: opt.name, code: opt.code });
+                }}
+              />
             </div>
-          ) : null}
+          ) : (
+            <p className="field-caption">4 countries maximum</p>
+          )}
         </section>
 
         <section className="surface model-surface">
@@ -523,7 +502,6 @@ function App() {
           </p>
           {mood ? <MoodReadout mood={mood} /> : null}
         </section>
-
 
         <section className="songs" aria-label="Song results">
           {!hasSearched && songs.length === 0 ? (
@@ -736,7 +714,6 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
             </button>
           ))}
         </div>
-
       ) : null}
     </div>
   );
@@ -866,7 +843,7 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange, onSongUpdat
   }
 
   const progress = duration ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const languages = String(song.language || "Music")
+  const songLanguages = String(song.language || "Music")
     .split(/[,+/]/)
     .map((item) => item.trim())
     .filter(Boolean)
@@ -898,8 +875,8 @@ function SongRow({ song, songKey, activeSongKey, onActiveSongChange, onSongUpdat
             {song.reason ? <p className="song-reason">{song.reason}</p> : null}
           </div>
           <div className="song-tags">
-            {languages.map((language) => (
-              <span className="song-tag" key={language}>{language}</span>
+            {songLanguages.map((lang) => (
+              <span className="song-tag" key={lang}>{lang}</span>
             ))}
           </div>
           <button className="song-copy" type="button" onClick={copySong} aria-label={`Copy ${song.title}`}>

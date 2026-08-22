@@ -21,13 +21,14 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 - Upload up to 4 travel photos with a dynamic preview layout.
 - Detect the photo country from EXIF GPS when available to guide mood analysis.
-- Choose which countries the music should come from with multi-country selection and country flags.
-- Refine preferred languages with auto-derived defaults, custom additions, and quick-pick recent languages.
+- Choose which countries the music should come from with a curated list (up to 4 countries maximum).
+- Allocate song counts per country with responsive `+` and `−` steppers (e.g. 3 from Sri Lanka, 3 from Japan, 2 from India).
 - Tune the vibe with discrete Energy (Calm / Easy / Lively / High) and Style (Traditional / Mixed / Modern) segmented controls.
 - Choose Gemini, Qwen, or DeepSeek for photo mood reading and song generation.
 - Play songs with lazy on-demand YouTube lookup, caching, and seek timeline.
 - Copy individual song names from each result row.
 - Runs on Cloudflare Pages + Functions so API keys stay server-side.
+
 
 ## 🧱 Stack
 
