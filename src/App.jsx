@@ -149,16 +149,26 @@ function App() {
 
     const detected = await detectCountry(nextPhotos);
     if (detected) {
+      const prevDetected = detectedCountry;
       setDetectedCountry(detected);
       setCountry(detected);
       const detectedCode = codeForCountry(detected);
       const newCountryObj = { name: detected, code: detectedCode };
-      setMusicCountries([newCountryObj]);
-      const newDefaults = defaultLanguagesFor(detected);
-      setLanguages(Array.from(new Set([...newDefaults, ...customLanguages])));
+
+      const shouldSeed =
+        musicCountries.length === 0 ||
+        (musicCountries.length === 1 &&
+          musicCountries[0].name === (prevDetected || "Sri Lanka"));
+
+      if (shouldSeed) {
+        setMusicCountries([newCountryObj]);
+        const newDefaults = defaultLanguagesFor(detected);
+        setLanguages(Array.from(new Set([...newDefaults, ...customLanguages])));
+      }
     } else {
       setDetectedCountry("");
     }
+
 
     event.target.value = "";
   }
@@ -720,12 +730,13 @@ function CountryPicker({ value, onChange, compact = false, placeholder = "Search
       {open ? (
         <div className="country-menu">
           {filtered.map((country) => (
-            <button type="button" key={country.code} onMouseDown={() => selectCountry(country.name)}>
+            <button type="button" key={country.code} onPointerDown={() => selectCountry(country.name)}>
               <span><FlagIcon code={country.code} /></span>
               <strong>{country.name}</strong>
             </button>
           ))}
         </div>
+
       ) : null}
     </div>
   );
