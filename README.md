@@ -18,7 +18,6 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 ## 📱 App Preview
 
-<!-- TODO: Screenshot updated with latest mobile UI -->
 <p align="center">
   <img src="./public/app-screenshot.png" alt="TravelTunes app screenshot" width="420" />
 </p>
