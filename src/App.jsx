@@ -276,6 +276,7 @@ function App() {
     try {
       let currentMood = mood;
       let resolvedVision = "";
+      let runId;
       setStatus(`Reading photo mood with ${modelLabel}...`);
       try {
         const imagePayloads = await Promise.all(photos.map((photo) => readFileAsVisionPayload(photo.file)));
@@ -290,6 +291,7 @@ function App() {
         currentMood = visionData.mood;
         setMood(visionData.mood);
         resolvedVision = visionData.resolvedModel || "";
+        runId = visionData.runId;
         if (visionData.mood?.energy != null && Number.isFinite(Number(visionData.mood.energy))) {
           setDetectedEnergy(Math.round(Number(visionData.mood.energy)));
         }
@@ -298,7 +300,7 @@ function App() {
       }
 
       setStatus("Building song list...");
-      const songData = await postJson("/api/songs", {
+      const songPayload = {
         model,
         country,
         musicCountries: musicCountries.map((c) => ({ name: c.name, count: c.count })),
@@ -306,7 +308,11 @@ function App() {
         style,
         imageNotes,
         mood: currentMood,
-      });
+      };
+      if (runId) {
+        songPayload.runId = runId;
+      }
+      const songData = await postJson("/api/songs", songPayload);
 
       const resolvedSongs = songData.resolvedModel || "";
       setResolvedModels({ vision: resolvedVision, songs: resolvedSongs });

@@ -2,6 +2,7 @@ import {
   deepSeekErrorMessage,
   isSameOrigin,
   json,
+  logRun,
   parseJsonText,
   qwenApiKey,
   qwenErrorMessage,
@@ -23,9 +24,14 @@ export async function onRequestPost({ request, env }) {
   if (!isSameOrigin(request)) {
     return json({ error: "Forbidden" }, 403);
   }
+  const runId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  let provider = "gemini";
+  let resolvedModel = "gemini-3.1-flash-lite";
+
   try {
     const body = await request.json();
-    const provider = body.model === "deepseek" ? "deepseek" : body.model === "qwen" ? "qwen" : "gemini";
+    provider = body.model === "deepseek" ? "deepseek" : body.model === "qwen" ? "qwen" : "gemini";
     const photos = Array.isArray(body.photos) ? body.photos.slice(0, 4) : [];
 
     if (!photos.length) {
@@ -33,21 +39,103 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (provider === "deepseek") {
-      const model = env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash-vision-exp";
-      if (!env.DEEPSEEK_API_KEY) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
-      return json({ mood: await callDeepSeekVision(env, body, photos, model), resolvedModel: model, demo: false });
+      resolvedModel = env.DEEPSEEK_VISION_MODEL || "deepseek-v4-flash-vision-exp";
+      if (!env.DEEPSEEK_API_KEY) {
+        const mood = demoMood(body);
+        await logRun(env, {
+          id: runId,
+          created_at: createdAt,
+          provider,
+          vision_model: resolvedModel,
+          vision_ms: 0,
+          mood_json: mood,
+        });
+        return json({ mood, resolvedModel, runId, demo: true });
+      }
+
+      const start = Date.now();
+      const mood = await callDeepSeekVision(env, body, photos, resolvedModel);
+      const visionMs = Date.now() - start;
+
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        vision_model: resolvedModel,
+        vision_ms: visionMs,
+        mood_json: mood,
+      });
+
+      return json({ mood, resolvedModel, runId, demo: false });
     }
 
     if (provider === "qwen") {
-      const model = env.QWEN_VISION_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
-      if (!qwenApiKey(env)) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
-      return json({ mood: await callQwenVision(env, body, photos, model), resolvedModel: model, demo: false });
+      resolvedModel = env.QWEN_VISION_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+      if (!qwenApiKey(env)) {
+        const mood = demoMood(body);
+        await logRun(env, {
+          id: runId,
+          created_at: createdAt,
+          provider,
+          vision_model: resolvedModel,
+          vision_ms: 0,
+          mood_json: mood,
+        });
+        return json({ mood, resolvedModel, runId, demo: true });
+      }
+
+      const start = Date.now();
+      const mood = await callQwenVision(env, body, photos, resolvedModel);
+      const visionMs = Date.now() - start;
+
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        vision_model: resolvedModel,
+        vision_ms: visionMs,
+        mood_json: mood,
+      });
+
+      return json({ mood, resolvedModel, runId, demo: false });
     }
 
-    const model = env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
-    if (!env.GEMINI_API_KEY) return json({ mood: demoMood(body), resolvedModel: model, demo: true });
-    return json({ mood: await callGeminiVision(env, body, photos, model), resolvedModel: model, demo: false });
+    resolvedModel = env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
+    if (!env.GEMINI_API_KEY) {
+      const mood = demoMood(body);
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        vision_model: resolvedModel,
+        vision_ms: 0,
+        mood_json: mood,
+      });
+      return json({ mood, resolvedModel, runId, demo: true });
+    }
+
+    const start = Date.now();
+    const mood = await callGeminiVision(env, body, photos, resolvedModel);
+    const visionMs = Date.now() - start;
+
+    await logRun(env, {
+      id: runId,
+      created_at: createdAt,
+      provider,
+      vision_model: resolvedModel,
+      vision_ms: visionMs,
+      mood_json: mood,
+    });
+
+    return json({ mood, resolvedModel, runId, demo: false });
   } catch (error) {
+    await logRun(env, {
+      id: runId,
+      created_at: createdAt,
+      provider,
+      vision_model: resolvedModel,
+      error: error.message || "Vision request failed.",
+    });
     return json({ error: error.message || "Vision request failed." }, 500);
   }
 }

@@ -9,5 +9,11 @@ pages_build_output_dir = "dist"
 # binding = "YT_CACHE"
 # id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
-
-
+# Optional: run log and usage counters
+# 1. Run `npx wrangler d1 create traveltunes-runs`
+# 2. Uncomment below and paste the returned database_id
+# 3. Apply migrations with `npx wrangler d1 migrations apply traveltunes-runs`
+# [[d1_databases]]
+# binding = "RUN_LOG"
+# database_name = "traveltunes-runs"
+# database_id = "REPLACE_WITH_DATABASE_ID"

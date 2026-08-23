@@ -1,7 +1,9 @@
 import {
+  bumpGeo,
   deepSeekErrorMessage,
   isSameOrigin,
   json,
+  logRun,
   parseJsonText,
   qwenApiKey,
   qwenErrorMessage,
@@ -23,26 +25,148 @@ export async function onRequestPost({ request, env }) {
   if (!isSameOrigin(request)) {
     return json({ error: "Forbidden" }, 403);
   }
+  let runId = null;
+  const createdAt = new Date().toISOString();
+  let provider = "gemini";
+  let resolvedModel = "gemini-3.1-flash-lite";
+  let selectedCountries = [];
+  let energy = null;
+  let style = null;
+
   try {
     const body = await request.json();
-    const provider = body.model === "deepseek" ? "deepseek" : body.model === "qwen" ? "qwen" : "gemini";
+    runId = body.runId || crypto.randomUUID();
+    provider = body.model === "deepseek" ? "deepseek" : body.model === "qwen" ? "qwen" : "gemini";
+    selectedCountries = Array.isArray(body.musicCountries)
+      ? body.musicCountries.map((c) => ({ name: c.name, count: c.count })).filter((c) => c.name)
+      : [];
+    energy = body.energy !== undefined && body.energy !== null ? Number(body.energy) : null;
+    style = body.style !== undefined && body.style !== null ? Number(body.style) : null;
+
+    // Bump aggregate geography counter once per run
+    await bumpGeo(env, request);
 
     if (provider === "deepseek") {
-      const model = env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-flash";
-      if (!env.DEEPSEEK_API_KEY) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
-      return json({ songs: normalizeSongs(await callDeepSeekSongs(env, body, model)), resolvedModel: model, demo: false });
+      resolvedModel = env.DEEPSEEK_TEXT_MODEL || "deepseek-v4-flash";
+      if (!env.DEEPSEEK_API_KEY) {
+        const songs = demoSongs(body);
+        await logRun(env, {
+          id: runId,
+          created_at: createdAt,
+          provider,
+          songs_model: resolvedModel,
+          songs_ms: 0,
+          songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+          countries: selectedCountries,
+          energy,
+          style,
+        });
+        return json({ songs, resolvedModel, runId, demo: true });
+      }
+
+      const start = Date.now();
+      const songs = normalizeSongs(await callDeepSeekSongs(env, body, resolvedModel));
+      const songsMs = Date.now() - start;
+
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        songs_model: resolvedModel,
+        songs_ms: songsMs,
+        songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+        countries: selectedCountries,
+        energy,
+        style,
+      });
+
+      return json({ songs, resolvedModel, runId, demo: false });
     }
 
     if (provider === "qwen") {
-      const model = env.QWEN_TEXT_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
-      if (!qwenApiKey(env)) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
-      return json({ songs: normalizeSongs(await callQwenSongs(env, body, model)), resolvedModel: model, demo: false });
+      resolvedModel = env.QWEN_TEXT_MODEL || env.QWEN_MODEL || "qwen3.5-flash";
+      if (!qwenApiKey(env)) {
+        const songs = demoSongs(body);
+        await logRun(env, {
+          id: runId,
+          created_at: createdAt,
+          provider,
+          songs_model: resolvedModel,
+          songs_ms: 0,
+          songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+          countries: selectedCountries,
+          energy,
+          style,
+        });
+        return json({ songs, resolvedModel, runId, demo: true });
+      }
+
+      const start = Date.now();
+      const songs = normalizeSongs(await callQwenSongs(env, body, resolvedModel));
+      const songsMs = Date.now() - start;
+
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        songs_model: resolvedModel,
+        songs_ms: songsMs,
+        songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+        countries: selectedCountries,
+        energy,
+        style,
+      });
+
+      return json({ songs, resolvedModel, runId, demo: false });
     }
 
-    const model = env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
-    if (!env.GEMINI_API_KEY) return json({ songs: demoSongs(body), resolvedModel: model, demo: true });
-    return json({ songs: normalizeSongs(await callGeminiSongs(env, body, model)), resolvedModel: model, demo: false });
+    resolvedModel = env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
+    if (!env.GEMINI_API_KEY) {
+      const songs = demoSongs(body);
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        songs_model: resolvedModel,
+        songs_ms: 0,
+        songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+        countries: selectedCountries,
+        energy,
+        style,
+      });
+      return json({ songs, resolvedModel, runId, demo: true });
+    }
+
+    const start = Date.now();
+    const songs = normalizeSongs(await callGeminiSongs(env, body, resolvedModel));
+    const songsMs = Date.now() - start;
+
+    await logRun(env, {
+      id: runId,
+      created_at: createdAt,
+      provider,
+      songs_model: resolvedModel,
+      songs_ms: songsMs,
+      songs_json: songs.map((s) => ({ title: s.title, artist: s.artist, language: s.language })),
+      countries: selectedCountries,
+      energy,
+      style,
+    });
+
+    return json({ songs, resolvedModel, runId, demo: false });
   } catch (error) {
+    if (runId) {
+      await logRun(env, {
+        id: runId,
+        created_at: createdAt,
+        provider,
+        songs_model: resolvedModel,
+        countries: selectedCountries,
+        energy,
+        style,
+        error: error.message || "Song request failed.",
+      });
+    }
     return json({ error: error.message || "Song request failed." }, 500);
   }
 }
@@ -88,10 +212,6 @@ async function callQwenSongs(env, body, model) {
 }
 
 async function callDeepSeekSongs(env, body, model) {
-  // The song call is text only — it receives the mood JSON from the vision call,
-  // never the images. Do not fallback to DEEPSEEK_VISION_MODEL because the vision model
-  // carries an "-exp" suffix and may be withdrawn without notice. Keeping the song call
-  // on the stable model ensures a withdrawal breaks the mood read only.
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
@@ -110,84 +230,76 @@ async function callDeepSeekSongs(env, body, model) {
   return parseJsonText(data.choices?.[0]?.message?.content)?.songs;
 }
 
-function songPrompt(body) {
-  const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
-  const validCountries = rawCountries.filter((c) => c && c.name && Number(c.count) > 0);
-  const total = 8;
-  const photoCountry = body.country || "unknown";
-  const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
-
-  let originInstruction;
-  if (validCountries.length > 0) {
-    const pairs = validCountries.map((c) => `${c.name}: ${c.count}`).join(", ");
-    originInstruction = `Choose ${total} real songs with this split by country of origin: ${pairs}. The photos were taken in ${photoCountry}; match the scene mood but do not let the photo location change the split. Where a country has several major music languages, choose whichever best fits the mood.`;
-  } else {
-    originInstruction = `Choose ${total} well-known international songs.`;
-  }
-
-  return `Return JSON only with {"songs":[...]}.
-Suggest ${total} real songs for travel photos.
-${originInstruction}
-Energy: ${body.energy} (15 Calm, 40 Easy, 65 Lively, 90 High)
-Style: ${body.style} (20 Traditional, 50 Mixed, 80 Modern)
-User image notes: ${imageNotes || "none"}
-Mood read: ${JSON.stringify(body.mood || {})}
-Each song object must be {"title": string, "artist": string, "language": string, "reason": string}.
-Avoid made-up songs.`;
+function normalizeSongs(songs) {
+  if (!Array.isArray(songs)) return [];
+  return songs
+    .filter((song) => song && typeof song === "object")
+    .map((song) => ({
+      title: String(song.title || "").trim(),
+      artist: String(song.artist || "").trim(),
+      language: String(song.language || "English").trim(),
+      reason: String(song.reason || "").trim(),
+    }))
+    .filter((song) => song.title && song.artist);
 }
 
-function normalizeSongs(songs) {
-  const clean = Array.isArray(songs) ? songs : [];
-  return clean
-    .filter((song) => song?.title && song?.artist)
-    .slice(0, 8)
-    .map((song) => ({
-      title: String(song.title).trim(),
-      artist: String(song.artist).trim(),
-      language: String(song.language || "Music").trim(),
-      reason: String(song.reason || "Fits the selected travel mood.").trim(),
-    }));
+function songPrompt(body) {
+  const imageNotes = String(body.imageNotes || "").trim().slice(0, 240);
+  const mood = body.mood || {};
+  const musicCountries = Array.isArray(body.musicCountries) && body.musicCountries.length > 0
+    ? body.musicCountries
+    : [{ name: body.country || "United States", count: 8 }];
+
+  const totalRequested = musicCountries.reduce((sum, item) => sum + (Number(item.count) || 0), 0) || 8;
+  const countryBreakdown = musicCountries
+    .map((item) => `- ${item.name}: exactly ${item.count} song(s)`)
+    .join("\n");
+
+  return `Recommend exactly ${totalRequested} real, recognizable songs for an Instagram reel/story matching this travel scene.
+
+Context:
+- Location in photo: ${body.country || "unknown"}
+- Energy slider: ${body.energy ?? 50}/100
+- Style slider: ${body.style ?? 50}/100 (0=traditional/local/folk, 100=modern/electronic/pop)
+- Image notes from user: ${imageNotes || "none"}
+- Mood analysis: ${JSON.stringify(mood)}
+
+Required country breakdown:
+${countryBreakdown}
+
+Rules:
+1. Return exactly ${totalRequested} songs in total, strictly adhering to the requested count per country.
+2. For each country, pick songs that genuinely represent that country's music scene (local language or famous local artists).
+3. Match the energy level (${body.energy ?? 50}/100) and style (${body.style ?? 50}/100).
+4. Return JSON only in this schema:
+{"songs": [{"title": string, "artist": string, "language": string, "reason": string}]}`;
 }
 
 function demoSongs(body) {
-  const rawCountries = Array.isArray(body.musicCountries) ? body.musicCountries : [];
-  const primaryCountry = rawCountries[0]?.name || body.country || "Sri Lanka";
-  return [
-    {
-      title: "Manike Mage Hithe",
-      artist: "Yohani",
-      language: "Sinhala",
-      reason: "Bright Sinhala pop for warm travel clips.",
-    },
-    {
-      title: "Paradise",
-      artist: "Coldplay",
-      language: "English",
-      reason: "Open, scenic, and easy to pair with landscapes.",
-    },
-    {
-      title: "Sunflower",
-      artist: "Post Malone and Swae Lee",
-      language: "English",
-      reason: "Soft mainstream energy for relaxed footage.",
-    },
-    {
-      title: "A Sky Full of Stars",
-      artist: "Coldplay",
-      language: "English",
-      reason: "Builds energy without losing the travel feel.",
-    },
-    {
-      title: "Shape of You",
-      artist: "Ed Sheeran",
-      language: "English",
-      reason: "Mainstream rhythm for lively photo batches.",
-    },
-    {
-      title: `${primaryCountry} travel music`,
-      artist: "Local artists",
-      language: "Local",
-      reason: "Use as a local search seed when a provider key is missing.",
-    },
+  const musicCountries = Array.isArray(body.musicCountries) && body.musicCountries.length > 0
+    ? body.musicCountries
+    : [{ name: body.country || "United States", count: 8 }];
+
+  const pool = [
+    { title: "Midnight City", artist: "M83", language: "French", reason: "Dreamy cinematic travel atmosphere" },
+    { title: "Daylight", artist: "Harry Styles", language: "English", reason: "Sunlit road trip vibe" },
+    { title: "Levitating", artist: "Dua Lipa", language: "English", reason: "High-energy upbeat moments" },
+    { title: "Bando Stone", artist: "Childish Gambino", language: "English", reason: "Warm tropical rhythm" },
+    { title: "Water", artist: "Tyla", language: "English", reason: "Vibrant coastal energy" },
+    { title: "Snooze", artist: "SZA", language: "English", reason: "Smooth sunset pacing" },
+    { title: "Golden Hour", artist: "JVKE", language: "English", reason: "Epic landscape reveal soundtrack" },
+    { title: "Espresso", artist: "Sabrina Carpenter", language: "English", reason: "Playful summer holiday groove" },
   ];
+
+  const result = [];
+  for (const c of musicCountries) {
+    for (let i = 0; i < (c.count || 0); i++) {
+      const item = pool[(result.length) % pool.length];
+      result.push({
+        ...item,
+        reason: `${item.reason} (matched for ${c.name})`,
+      });
+    }
+  }
+  return result.slice(0, 8);
 }

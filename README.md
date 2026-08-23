@@ -34,6 +34,7 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 - React 18 + Vite
 - Cloudflare Pages + Pages Functions
+- Cloudflare D1 (Optional text-only run logs & aggregate geo analytics)
 - FlagCDN for lightweight on-demand country flag images
 - `@icons-pack/react-simple-icons` for verified AI provider brand marks
 - `exifr` for client-side GPS metadata
@@ -89,6 +90,55 @@ YOUTUBE_API_KEY
   - Default vision model: `deepseek-v4-flash-vision-exp`
   - Default text model: `deepseek-v4-flash`
   - Overrides: `DEEPSEEK_VISION_MODEL`, `DEEPSEEK_TEXT_MODEL`
+
+
+## 📊 Run Log & Usage Analytics (Cloudflare D1)
+
+TravelTunes includes an optional, privacy-first debugging and analytics system powered by Cloudflare D1.
+
+### Privacy Guarantees & Plain-Text Transparency
+- **No personal data is stored.**
+- **Explicit Exclusion List (Never Stored or Logged):**
+  - No image bytes, base64 payloads, or image filenames
+  - No EXIF metadata or GPS coordinates
+  - No detected photo location
+  - No user image notes or free-text descriptions
+  - No IP addresses or request headers on run records
+  - No cookies, session identifiers, tracking pixels, or fingerprinting
+- **Runs Table (`runs`)**: Logs text-only technical debugging metadata for prompt and model evaluation:
+  - Timestamp, provider, resolved vision/songs models
+  - User-selected music countries (names & counts)
+  - Slider values (energy, style)
+  - Model response JSON (structured mood tags and song recommendations)
+  - Latency durations (`vision_ms`, `songs_ms`) and error messages
+- **Unlinkable Aggregate Geography (`usage_geo`)**:
+  - Increments a coarse daily country/city counter derived from Cloudflare Edge metadata.
+  - Stored separately from `runs` with **no joinable columns**, no timestamps finer than the day (`YYYY-MM-DD`), and no run IDs. The tables cannot be correlated.
+- **No HTTP API exposure**: There is no public or private HTTP endpoint exposing run data (`/api/runs` does not exist). Data is accessible solely via Wrangler CLI.
+
+### Setting up D1 (Optional)
+
+1. Create the D1 database:
+   ```bash
+   npx wrangler d1 create traveltunes-runs
+   ```
+2. Uncomment the `[[d1_databases]]` block in `wrangler.toml` and fill in `database_id`.
+3. Apply database migrations:
+   ```bash
+   npx wrangler d1 migrations apply traveltunes-runs
+   ```
+
+### Querying Logs & Analytics
+
+Query the latest model runs:
+```bash
+npm run runs:tail
+```
+
+Query aggregate daily geography counters:
+```bash
+npm run geo:tail
+```
 
 
 ## 📦 Cloudflare KV Caching
