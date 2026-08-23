@@ -10,7 +10,10 @@
     "cf:dev": "npm run build && npx wrangler@3.114.14 pages dev dist --compatibility-date=2026-06-28",
     "d1:migrate": "npx wrangler@3.114.14 d1 migrations apply traveltunes-runs --remote",
     "runs:tail": "npx wrangler@3.114.14 d1 execute traveltunes-runs --remote --command \"SELECT created_at, provider, vision_model, songs_model, countries, error FROM runs ORDER BY created_at DESC LIMIT 20\"",
-    "geo:tail": "npx wrangler@3.114.14 d1 execute traveltunes-runs --remote --command \"SELECT day, country, city, runs FROM usage_geo ORDER BY day DESC, runs DESC LIMIT 30\""
+    "geo:tail": "npx wrangler@3.114.14 d1 execute traveltunes-runs --remote --command \"SELECT day, country, city, runs FROM usage_geo ORDER BY day DESC, runs DESC LIMIT 30\"",
+    "check:gemini": "node scripts/check-gemini.mjs",
+    "check:qwen": "node scripts/check-qwen.mjs",
+    "check:deepseek": "node scripts/check-deepseek.mjs"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.15.1",

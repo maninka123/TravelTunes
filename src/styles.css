@@ -77,6 +77,32 @@ figure {
   padding: 12px 2px 18px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.privacy-link {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.privacy-link:hover {
+  color: var(--teal);
+  text-decoration: underline;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  padding-top: 12px;
+}
+
 .brand {
   display: flex;
   align-items: center;
