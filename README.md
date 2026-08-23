@@ -7,14 +7,20 @@ Photo mood to country-aware songs, wrapped in a clean mobile-first app.
 ![Vite](https://img.shields.io/badge/Vite-6-646cff?style=for-the-badge&logo=vite&logoColor=white)
 ![Cloudflare Pages](https://img.shields.io/badge/Cloudflare-Pages-f38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 
+## 📋 Requirements
+
+- **Node.js**: v20 or later.
+- **Wrangler**: npm scripts pin `wrangler@3.114.14` for compatibility with Node 20 (Wrangler 4 requires Node 22).
+
 ## 🌐 Live App
 
 Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 
 ## 📱 App Preview
 
+<!-- TODO: Screenshot updated with latest mobile UI -->
 <p align="center">
-  <img src="./public/app-screenshot.png" alt="TravelTunes full app screenshot" width="420" />
+  <img src="./public/app-screenshot.png" alt="TravelTunes app screenshot" width="420" />
 </p>
 
 ## ✨ What It Does
@@ -51,20 +57,31 @@ Install dependencies:
 npm install
 ```
 
-Run frontend only:
+Start the local development server (serves the frontend and routes `/api/*` via Vite dev middleware):
 
 ```bash
 npm run dev
 ```
 
-Run with Cloudflare Functions locally:
+Run with Cloudflare Pages Functions locally using Wrangler (verifies behavior against the real Cloudflare runtime before deploying; note that D1, KV bindings, and `request.cf` exist only here):
 
 ```bash
 cp .dev.vars.example .dev.vars
 npm run cf:dev
 ```
 
-Add real keys to `.dev.vars` or copy them from `.env.local`. These files are ignored by git.
+Add real keys to `.dev.vars` or `.env.local`. These files are ignored by git.
+
+### Verifying Provider Keys
+
+Verify your provider credentials and test both text and vision endpoints:
+
+```bash
+npm run check:gemini
+npm run check:qwen
+npm run check:deepseek
+```
+
 
 ## 🔐 Required Env Vars
 
@@ -94,38 +111,21 @@ YOUTUBE_API_KEY
 
 ## 📊 Run Log & Usage Analytics (Cloudflare D1)
 
-TravelTunes includes an optional, privacy-first debugging and analytics system powered by Cloudflare D1.
-
-### Privacy Guarantees & Plain-Text Transparency
-- **No personal data is stored.**
-- **Explicit Exclusion List (Never Stored or Logged):**
-  - No image bytes, base64 payloads, or image filenames
-  - No EXIF metadata or GPS coordinates
-  - No detected photo location
-  - No user image notes or free-text descriptions
-  - No IP addresses or request headers on run records
-  - No cookies, session identifiers, tracking pixels, or fingerprinting
-- **Runs Table (`runs`)**: Logs text-only technical debugging metadata for prompt and model evaluation:
-  - Timestamp, provider, resolved vision/songs models
-  - User-selected music countries (names & counts)
-  - Slider values (energy, style)
-  - Model response JSON (structured mood tags and song recommendations)
-  - Latency durations (`vision_ms`, `songs_ms`) and error messages
-- **Unlinkable Aggregate Geography (`usage_geo`)**:
-  - Increments a coarse daily country/city counter derived from Cloudflare Edge metadata.
-  - Stored separately from `runs` with **no joinable columns**, no timestamps finer than the day (`YYYY-MM-DD`), and no run IDs. The tables cannot be correlated.
-- **No HTTP API exposure**: There is no public or private HTTP endpoint exposing run data (`/api/runs` does not exist). Data is accessible solely via Wrangler CLI.
+TravelTunes includes an optional, text-only run log for debugging prompt quality and model responses.
+The log records model outputs, latency, selected countries, and slider values, but never stores photos, image locations, image notes, or IP addresses.
+Logging is completely disabled unless the `RUN_LOG` D1 binding is configured.
+For full details on data handling and privacy, see [PRIVACY.md](PRIVACY.md); for setup instructions, see [SETUP-D1.md](SETUP-D1.md).
 
 ### Setting up D1 (Optional)
 
 1. Create the D1 database:
    ```bash
-   npx wrangler d1 create traveltunes-runs
+   npx wrangler@3.114.14 d1 create traveltunes-runs
    ```
 2. Uncomment the `[[d1_databases]]` block in `wrangler.toml` and fill in `database_id`.
 3. Apply database migrations:
    ```bash
-   npx wrangler d1 migrations apply traveltunes-runs
+   npm run d1:migrate
    ```
 
 ### Querying Logs & Analytics
@@ -146,7 +146,7 @@ npm run geo:tail
 Create the KV namespace for YouTube search results:
 
 ```bash
-npx wrangler kv:namespace create YT_CACHE
+npx wrangler@3.114.14 kv namespace create YT_CACHE
 ```
 
 Add the generated namespace ID to `wrangler.toml`:
@@ -167,14 +167,13 @@ Build command: npm run build
 Output directory: dist
 ```
 
-Then add the env vars above in:
-
-```text
-Cloudflare Pages → Settings → Environment variables
-```
+> [!NOTE]
+> `.dev.vars` and `.env.local` are gitignored and never deployed. Every required API key must be configured in your Cloudflare dashboard under:
+> **Cloudflare Pages → Settings → Environment variables**
 
 Every push to GitHub can deploy automatically once the repo is connected.
 
-## 📍 Future Place Data
 
-Use the `places/` folder for place-specific song rules, language defaults, or curated overrides.
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

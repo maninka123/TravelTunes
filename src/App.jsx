@@ -357,9 +357,19 @@ function App() {
               <p>Photo mood to country-aware songs.</p>
             </div>
           </div>
-          <button className="icon-button" type="button" onClick={resetAll} aria-label="Reset">
-            <RotateCcw size={19} />
-          </button>
+          <div className="topbar-actions">
+            <a
+              href="https://github.com/maninka123/TravelTunes/blob/main/PRIVACY.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="privacy-link"
+            >
+              Privacy
+            </a>
+            <button className="icon-button" type="button" onClick={resetAll} aria-label="Reset">
+              <RotateCcw size={19} />
+            </button>
+          </div>
         </header>
 
         <section className="surface photo-surface">
@@ -545,6 +555,17 @@ function App() {
         </button>
 
         {status ? <p className="status">{status}</p> : null}
+
+        <footer className="app-footer">
+          <a
+            href="https://github.com/maninka123/TravelTunes/blob/main/PRIVACY.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="privacy-link"
+          >
+            Privacy
+          </a>
+        </footer>
       </section>
     </main>
   );
