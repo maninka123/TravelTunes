@@ -9,14 +9,8 @@ pages_build_output_dir = "dist"
 # binding = "YT_CACHE"
 # id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
-# Optional: run log and aggregate usage counters (Cloudflare D1)
-# Checklist to enable:
-# 1. Run `npx wrangler@3.114.14 d1 create traveltunes-runs`
-# 2. Uncomment the [[d1_databases]] block below.
-# 3. Paste the returned database_id into `database_id = "..."`.
-#    IMPORTANT: Keep `binding = "RUN_LOG"`. Do NOT rename it to "DB".
-# 4. Apply remote migrations with `npm run d1:migrate`
-# [[d1_databases]]
-# binding = "RUN_LOG"
-# database_name = "traveltunes-runs"
-# database_id = "REPLACE_WITH_DATABASE_ID"
+# Run log and aggregate usage counters (Cloudflare D1)
+[[d1_databases]]
+binding = "RUN_LOG"
+database_name = "traveltunes-runs"
+database_id = "9bcce2f0-c286-4299-8f82-ab4c2915b21b"
