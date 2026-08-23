@@ -3,16 +3,19 @@ compatibility_date = "2026-06-28"
 pages_build_output_dir = "dist"
 
 # Optional: To enable persistent KV caching across serverless instances:
-# 1. Run `npx wrangler kv namespace create YT_CACHE`
+# 1. Run `npx wrangler@3.114.14 kv namespace create YT_CACHE`
 # 2. Uncomment the block below and replace the id with your generated 32-character hex ID:
 # [[kv_namespaces]]
 # binding = "YT_CACHE"
 # id = "REPLACE_WITH_KV_NAMESPACE_ID"
 
-# Optional: run log and usage counters
-# 1. Run `npx wrangler d1 create traveltunes-runs`
-# 2. Uncomment below and paste the returned database_id
-# 3. Apply migrations with `npx wrangler d1 migrations apply traveltunes-runs`
+# Optional: run log and aggregate usage counters (Cloudflare D1)
+# Checklist to enable:
+# 1. Run `npx wrangler@3.114.14 d1 create traveltunes-runs`
+# 2. Uncomment the [[d1_databases]] block below.
+# 3. Paste the returned database_id into `database_id = "..."`.
+#    IMPORTANT: Keep `binding = "RUN_LOG"`. Do NOT rename it to "DB".
+# 4. Apply remote migrations with `npm run d1:migrate`
 # [[d1_databases]]
 # binding = "RUN_LOG"
 # database_name = "traveltunes-runs"
