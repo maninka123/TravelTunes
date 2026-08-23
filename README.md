@@ -19,7 +19,7 @@ Try it here: **[traveltunes.pages.dev](https://traveltunes.pages.dev)**
 ## 📱 App Preview
 
 <p align="center">
-  <img src="./public/app-screenshot.png" alt="TravelTunes app screenshot" width="420" />
+  <img src="public/screenshot.png" alt="TravelTunes app screenshot" width="420" />
 </p>
 
 ## ✨ What It Does
